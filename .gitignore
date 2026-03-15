@@ -3,3 +3,6 @@ out/
 dist/
 dist-electron/
 *.tsbuildinfo
+DESIGN.md
+PLAN.md
+.claude/
