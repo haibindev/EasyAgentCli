@@ -103,6 +103,13 @@ html, body, #root {
   color: var(--amber);
 }
 
+.toolbar-btn.lang-btn {
+  font-weight: 700;
+  font-size: 12px;
+  min-width: 32px;
+  text-align: center;
+}
+
 .toolbar-btn .dot {
   width: 8px;
   height: 8px;

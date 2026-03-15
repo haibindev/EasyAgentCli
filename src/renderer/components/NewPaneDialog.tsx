@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { PaneType } from '../types'
+import { useI18n } from '../i18n-context'
 
 const TYPE_NAMES: Record<PaneType, string> = {
   claude: 'Claude Code',
@@ -40,6 +41,7 @@ interface Props {
 }
 
 export default function NewPaneDialog({ type, onConfirm, onClose }: Props) {
+  const { t } = useI18n()
   const [cwd, setCwd] = useState(getLastCwd)
   const [shellVariant, setShellVariant] = useState(getLastShell)
 
@@ -63,11 +65,11 @@ export default function NewPaneDialog({ type, onConfirm, onClose }: Props) {
   return (
     <div className="dialog-overlay" onClick={onClose} onKeyDown={e => e.key === 'Escape' && onClose()}>
       <form className="dialog" onClick={e => e.stopPropagation()} onSubmit={handleSubmit}>
-        <h3>新建 {TYPE_NAMES[type]} 终端</h3>
+        <h3>{t.newPaneTitle(TYPE_NAMES[type])}</h3>
 
         {type === 'shell' && (
           <div className="dialog-field">
-            <label>Shell 类型</label>
+            <label>{t.shellType}</label>
             <select
               className="dialog-select"
               value={shellVariant}
@@ -81,24 +83,24 @@ export default function NewPaneDialog({ type, onConfirm, onClose }: Props) {
         )}
 
         <div className="dialog-field">
-          <label>工作目录</label>
+          <label>{t.workDir}</label>
           <div className="input-row">
             <input
               type="text"
               value={cwd}
               onChange={e => setCwd(e.target.value)}
-              placeholder="选择工作目录..."
+              placeholder={t.workDirPlaceholder}
               autoFocus
             />
             <button type="button" className="browse-btn" onClick={handleBrowse}>
-              浏览...
+              {t.browse}
             </button>
           </div>
         </div>
 
         <div className="dialog-actions">
-          <button type="button" className="btn-cancel" onClick={onClose}>取消</button>
-          <button type="submit" className="btn-create">创建</button>
+          <button type="button" className="btn-cancel" onClick={onClose}>{t.cancel}</button>
+          <button type="submit" className="btn-create">{t.create}</button>
         </div>
       </form>
     </div>

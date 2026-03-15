@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react'
+import { getLang, getTranslations } from '../i18n'
 
 interface Props {
   children: ReactNode
@@ -37,7 +38,7 @@ export default class ErrorBoundary extends Component<Props, State> {
           fontSize: 13,
           padding: 16
         }}>
-          <span>组件出错</span>
+          <span>{getTranslations(getLang()).componentError}</span>
           <span style={{ color: '#6e7681', fontSize: 11 }}>
             {this.state.error?.message}
           </span>
@@ -54,7 +55,7 @@ export default class ErrorBoundary extends Component<Props, State> {
               fontSize: 12
             }}
           >
-            重试
+            {getTranslations(getLang()).retry}
           </button>
         </div>
       )

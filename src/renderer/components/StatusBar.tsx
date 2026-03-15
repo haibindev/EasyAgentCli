@@ -1,12 +1,5 @@
 import type { PaneInfo, BridgeStatus } from '../types'
-
-const STATUS_LABELS: Record<string, { text: string; color: string }> = {
-  running: { text: '运行中', color: 'var(--green)' },
-  idle: { text: '空闲', color: 'var(--text-dim)' },
-  confirm: { text: '等待确认', color: 'var(--amber)' },
-  done: { text: '已完成', color: 'var(--accent-claude)' },
-  error: { text: '错误', color: 'var(--red)' }
-}
+import { useI18n } from '../i18n-context'
 
 interface Props {
   panes: PaneInfo[]
@@ -17,6 +10,16 @@ interface Props {
 }
 
 export default function StatusBar({ panes, bridgeStatus, leaveMode, activePane, onActivatePane }: Props) {
+  const { t } = useI18n()
+
+  const STATUS_LABELS: Record<string, { text: string; color: string }> = {
+    running: { text: t.statusRunning, color: 'var(--green)' },
+    idle: { text: t.statusIdle, color: 'var(--text-dim)' },
+    confirm: { text: t.statusConfirm, color: 'var(--amber)' },
+    done: { text: t.statusDone, color: 'var(--accent-claude)' },
+    error: { text: t.statusError, color: 'var(--red)' }
+  }
+
   return (
     <div className="status-bar">
       <div className="status-panes">
@@ -39,17 +42,17 @@ export default function StatusBar({ panes, bridgeStatus, leaveMode, activePane, 
       <div className="status-right">
         <span className="bridge-info">
           {leaveMode && bridgeStatus.clientCount > 0 && (
-            <>🔗 {bridgeStatus.clientCount} 个远程连接</>
+            <>🔗 {t.remoteConnections(bridgeStatus.clientCount)}</>
           )}
           {leaveMode && bridgeStatus.clientCount === 0 && (
-            <>⚠️ 无远程连接</>
+            <>⚠️ {t.noRemoteConnection}</>
           )}
           {!leaveMode && bridgeStatus.serverRunning && (
-            <>🔌 Bridge 就绪</>
+            <>🔌 {t.bridgeReady}</>
           )}
         </span>
         {panes.length > 0 && (
-          <span className="status-pane-count">{panes.length} 个终端</span>
+          <span className="status-pane-count">{t.terminalCount(panes.length)}</span>
         )}
       </div>
     </div>

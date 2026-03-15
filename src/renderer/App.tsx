@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { PaneInfo, PaneType, BridgeStatus, LayoutMode, YoloLevel } from './types'
+import { useI18n } from './i18n-context'
 import Toolbar from './components/Toolbar'
 import StatusBar from './components/StatusBar'
 import TerminalPane from './components/TerminalPane'
@@ -22,6 +23,7 @@ function saveLayout(mode: LayoutMode): void {
 }
 
 export default function App() {
+  const { t } = useI18n()
   const [panes, setPanes] = useState<PaneInfo[]>([])
   const [activePane, setActivePane] = useState<string | null>(null)
   const [leaveMode, setLeaveMode] = useState(false)
@@ -72,7 +74,7 @@ export default function App() {
   const handleClosePane = useCallback(async (id: string) => {
     const pane = panes.find(p => p.id === id)
     if (pane && pane.status === 'running') {
-      const ok = window.confirm(`"${pane.title}" 正在运行中，确定关闭？`)
+      const ok = window.confirm(t.confirmClose(pane.title))
       if (!ok) return
     }
     await window.api.closePane(id)
@@ -170,7 +172,7 @@ export default function App() {
   const renderEmptySlot = (key: string) => (
     <div className="empty-slot" key={key}>
       <div className="empty-slot-inner">
-        <span className="empty-slot-hint">空位</span>
+        <span className="empty-slot-hint">{t.emptySlot}</span>
         <div className="empty-slot-btns">
           <button className="empty-slot-btn" onClick={() => handleAddPane('claude')}>
             <span style={{ color: 'var(--accent-claude)' }}>●</span> Claude
@@ -206,7 +208,7 @@ export default function App() {
       <Toolbar
         leaveMode={leaveMode}
         layout={layout}
-        overflowHint={isOverflow ? `超出 ${layout.rows}×${layout.cols} 布局，已自动扩展` : undefined}
+        overflowHint={isOverflow ? t.overflowHint(layout.rows, layout.cols) : undefined}
         onAddPane={handleAddPane}
         onToggleLeaveMode={handleToggleLeaveMode}
         onSetLayout={handleSetLayout}
@@ -217,7 +219,7 @@ export default function App() {
         {panes.length === 0 ? (
           <div className="empty-state">
             <h2>EasyAgentCli</h2>
-            <p>多窗格 AI Agent 终端管理器</p>
+            <p>{t.appSubtitle}</p>
             <div className="quick-btns">
               <button className="quick-btn" onClick={() => handleAddPane('claude')}>
                 <span style={{ color: 'var(--accent-claude)', fontSize: 20 }}>●</span>

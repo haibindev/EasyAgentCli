@@ -27,23 +27,16 @@ Modern AI coding assistants run in terminals — but juggling multiple sessions 
 - Let **YOLO auto-answer** handle confirmations while you focus on what matters
 - Walk away and monitor everything from **Feishu / Discord / Telegram / Openclaw** on your phone
 
-## Preview
+## Screenshot
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  [+Claude] [+Codex] [+Shell]   ⚙  Layout[2×2]  🚶Leave    │
-├──────────────────────┬──────────────────────────────────────┤
-│ ▌Claude #1     ~/prj │ ▌Codex #2    ~/other   [↻] [×]     │
-│  $ claude            │  $ codex                            │
-│  > Working on...     │  > Analyzing...                     │
-├──────────────────────┼──────────────────────────────────────┤
-│ ▌Shell #3    ~/work  │           Empty Slot                 │
-│  $ git status        │   [● Claude] [● Codex] [● Shell]    │
-│  On branch main...   │                                     │
-├──────────────────────┴──────────────────────────────────────┤
-│ Claude #1: running  Codex #2: waiting   🔌 Bridge  3 panes │
-└─────────────────────────────────────────────────────────────┘
-```
+![EasyAgentCli](assets/screenshot-en.png)
+
+<details>
+<summary>Adapter Settings</summary>
+
+![Adapter Settings](assets/screenshot-settings-en.png)
+
+</details>
 
 ## Features
 

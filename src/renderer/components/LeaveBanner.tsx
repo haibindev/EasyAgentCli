@@ -1,7 +1,10 @@
+import { useI18n } from '../i18n-context'
+
 export default function LeaveBanner() {
+  const { t } = useI18n()
   return (
     <div className="leave-banner">
-      离开模式已开启 — 事件将通过远程桥接转发
+      {t.leaveBannerText}
     </div>
   )
 }

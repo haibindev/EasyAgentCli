@@ -1,5 +1,6 @@
 import type { PaneType, LayoutMode } from '../types'
 import { LAYOUT_PRESETS } from '../types'
+import { useI18n } from '../i18n-context'
 
 const TYPE_COLORS: Record<PaneType, string> = {
   claude: 'var(--accent-claude)',
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export default function Toolbar({ leaveMode, layout, overflowHint, onAddPane, onToggleLeaveMode, onSetLayout, onOpenSettings }: Props) {
+  const { lang, t, toggleLang } = useI18n()
   const currentLabel = `${layout.rows}×${layout.cols}`
 
   const handleLayoutChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -38,7 +40,7 @@ export default function Toolbar({ leaveMode, layout, overflowHint, onAddPane, on
 
       <div className="toolbar-center">
         {leaveMode && (
-          <span className="toolbar-hint toolbar-hint-leave">离开模式已开启 — 事件将通过飞书转发</span>
+          <span className="toolbar-hint toolbar-hint-leave">{t.leaveModeHint}</span>
         )}
         {overflowHint && (
           <span className="toolbar-hint toolbar-hint-overflow">{overflowHint}</span>
@@ -47,7 +49,7 @@ export default function Toolbar({ leaveMode, layout, overflowHint, onAddPane, on
 
       <div className="toolbar-right">
         <div className="layout-selector">
-          <span className="layout-label">布局</span>
+          <span className="layout-label">{t.layoutLabel}</span>
           <select
             className="layout-select"
             value={currentLabel}
@@ -55,19 +57,22 @@ export default function Toolbar({ leaveMode, layout, overflowHint, onAddPane, on
           >
             {LAYOUT_PRESETS.map(({ label, mode }) => (
               <option key={label} value={label}>
-                {label} ({mode.rows * mode.cols}格)
+                {label} ({t.layoutSlots(mode.rows * mode.cols)})
               </option>
             ))}
           </select>
         </div>
-        <button className="toolbar-btn" onClick={onOpenSettings} title="远程适配器设置">
+        <button className="toolbar-btn" onClick={onOpenSettings} title={t.settingsTitle}>
           ⚙
         </button>
         <button
           className={`toolbar-btn ${leaveMode ? 'active' : ''}`}
           onClick={onToggleLeaveMode}
         >
-          {leaveMode ? '🚶 离开中' : '🚶 离开模式'}
+          {leaveMode ? t.leaveModeActive : t.leaveModeInactive}
+        </button>
+        <button className="toolbar-btn lang-btn" onClick={toggleLang} title="中文 / English">
+          {lang === 'zh' ? 'EN' : '中'}
         </button>
       </div>
     </div>

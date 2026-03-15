@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useI18n } from '../i18n-context'
 
 interface AdapterConfig {
   enabled: boolean
@@ -53,13 +54,13 @@ const OpenclawIcon = () => (
 
 // ── Toggle switch component ──
 
-function ToggleSwitch({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+function ToggleSwitch({ checked, onChange, disabled, titleOn, titleOff }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; titleOn?: string; titleOff?: string }) {
   return (
     <button
       type="button"
       className={`toggle-switch ${checked ? 'on' : ''} ${disabled ? 'disabled' : ''}`}
       onClick={() => !disabled && onChange(!checked)}
-      title={checked ? '点击停用' : '点击启用'}
+      title={checked ? (titleOn || '') : (titleOff || '')}
     >
       <span className="toggle-knob" />
     </button>
@@ -77,6 +78,7 @@ interface AdapterDef {
 }
 
 export default function AdapterSettings({ onClose }: Props) {
+  const { t } = useI18n()
   const [configs, setConfigs] = useState<Record<string, AdapterConfig>>({})
   const [status, setStatus] = useState<Record<string, boolean>>({})
   const [saving, setSaving] = useState<string | null>(null)
@@ -139,12 +141,12 @@ export default function AdapterSettings({ onClose }: Props) {
   const adapters: AdapterDef[] = [
     {
       key: 'feishu',
-      label: '飞书 Bot',
+      label: t.feishuBot,
       icon: <FeishuIcon />,
       fields: [
         { name: 'appId', placeholder: 'App ID (cli_xxx)' },
         { name: 'appSecret', placeholder: 'App Secret', type: 'password' },
-        { name: 'chatId', placeholder: 'Chat ID (可选，自动学习)' },
+        { name: 'chatId', placeholder: t.chatIdHint },
       ],
     },
     {
@@ -153,7 +155,7 @@ export default function AdapterSettings({ onClose }: Props) {
       icon: <DiscordIcon />,
       fields: [
         { name: 'token', placeholder: 'Bot Token', type: 'password' },
-        { name: 'channelId', placeholder: 'Channel ID (可选，自动学习)' },
+        { name: 'channelId', placeholder: t.channelIdHint },
       ],
     },
     {
@@ -161,13 +163,13 @@ export default function AdapterSettings({ onClose }: Props) {
       label: 'Telegram Bot',
       icon: <TelegramIcon />,
       fields: [
-        { name: 'token', placeholder: 'Bot Token (从 @BotFather 获取)', type: 'password' },
-        { name: 'chatId', placeholder: 'Chat ID (可选，自动学习)' },
+        { name: 'token', placeholder: t.telegramTokenHint, type: 'password' },
+        { name: 'chatId', placeholder: t.chatIdHint },
       ],
     },
     {
       key: 'openclaw',
-      label: 'Openclaw 中继',
+      label: t.openclawRelay,
       icon: <OpenclawIcon />,
       fields: [
         { name: 'url', placeholder: 'WebSocket URL (ws://192.168.x.x:18800)' },
@@ -179,7 +181,7 @@ export default function AdapterSettings({ onClose }: Props) {
             checked={(configs.openclaw || {}).autoReconnect !== false}
             onChange={e => update('openclaw', 'autoReconnect', e.target.checked)}
           />
-          自动重连
+          {t.autoReconnect}
         </label>
       ),
     },
@@ -188,7 +190,7 @@ export default function AdapterSettings({ onClose }: Props) {
   return (
     <div className="dialog-overlay" onClick={onClose}>
       <div className="dialog adapter-dialog" onClick={e => e.stopPropagation()}>
-        <h3>远程适配器配置</h3>
+        <h3>{t.adapterDialogTitle}</h3>
 
         {adapters.map(({ key, label, icon, fields, extra }) => {
           const cfg = configs[key] || { enabled: false }
@@ -205,18 +207,19 @@ export default function AdapterSettings({ onClose }: Props) {
                   {icon}
                   <span className="adapter-name">{label}</span>
                   {configured && !isExpanded && (
-                    <span className="adapter-configured-hint">已配置</span>
+                    <span className="adapter-configured-hint">{t.configured}</span>
                   )}
                 </div>
                 <div className="adapter-header-right">
                   <span className={`adapter-status ${isConnected ? 'connected' : ''}`}>
-                    {isConnected ? '已连接' : isEnabled && isSaving ? '连接中' : isEnabled ? '未连接' : ''}
+                    {isConnected ? t.connected : isEnabled && isSaving ? t.connecting : isEnabled ? t.notConnected : ''}
                   </span>
                   <ToggleSwitch
                     checked={isEnabled}
                     disabled={isSaving || (!configured && !isEnabled)}
+                    titleOn={t.clickToDisable}
+                    titleOff={t.clickToEnable}
                     onChange={(v) => {
-                      // Don't bubble to expand/collapse
                       handleToggleEnabled(key, v)
                     }}
                   />
@@ -241,7 +244,7 @@ export default function AdapterSettings({ onClose }: Props) {
                     onClick={() => handleSave(key)}
                     disabled={isSaving}
                   >
-                    {isSaving ? '保存中...' : '保存配置'}
+                    {isSaving ? t.saving : t.saveConfig}
                   </button>
                 </div>
               )}
@@ -250,7 +253,7 @@ export default function AdapterSettings({ onClose }: Props) {
         })}
 
         <div className="dialog-actions">
-          <button className="btn-cancel" onClick={onClose}>关闭</button>
+          <button className="btn-cancel" onClick={onClose}>{t.close}</button>
         </div>
       </div>
     </div>

@@ -3,6 +3,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { PaneInfo, YoloLevel } from '../types'
+import { useI18n } from '../i18n-context'
 
 const TYPE_COLORS: Record<string, string> = {
   claude: '#2ea043',
@@ -27,6 +28,7 @@ interface Props {
 }
 
 export default function TerminalPane({ pane, active, onActivate, onClose, onRestart, onYoloChange, onRename }: Props) {
+  const { t } = useI18n()
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -126,7 +128,7 @@ export default function TerminalPane({ pane, active, onActivate, onClose, onRest
     // Show exit message when PTY process exits
     const unsubExit = window.api.onPaneExit((msg) => {
       if (msg.id === pane.id) {
-        term.write(`\r\n\x1b[90m[进程已退出，代码: ${msg.exitCode}。按 ↻ 重启]\x1b[0m\r\n`)
+        term.write(`\r\n\x1b[90m${t.processExited(msg.exitCode)}\x1b[0m\r\n`)
       }
     })
 
@@ -184,17 +186,17 @@ export default function TerminalPane({ pane, active, onActivate, onClose, onRest
             onClick={e => e.stopPropagation()}
           />
         ) : (
-          <span className="pane-title" onDoubleClick={handleDoubleClick} title="双击重命名">
+          <span className="pane-title" onDoubleClick={handleDoubleClick} title={t.doubleClickRename}>
             {pane.title}
           </span>
         )}
         <span className="pane-cwd" title={pane.cwd}>{shortenPath(pane.cwd)}</span>
         {pane.lastEvent && pane.status !== 'running' && (
           <span className={`pane-event-badge pane-event-${pane.status}`}>
-            {pane.status === 'confirm' ? '需确认' :
-             pane.status === 'done' ? '已完成' :
-             pane.status === 'error' ? '错误' :
-             pane.status === 'idle' ? '空闲' : ''}
+            {pane.status === 'confirm' ? t.badgeConfirm :
+             pane.status === 'done' ? t.badgeDone :
+             pane.status === 'error' ? t.badgeError :
+             pane.status === 'idle' ? t.badgeIdle : ''}
           </span>
         )}
         <div className="pane-controls">
@@ -215,21 +217,21 @@ export default function TerminalPane({ pane, active, onActivate, onClose, onRest
             onChange={e => onYoloChange(e.target.value as YoloLevel)}
             onClick={e => e.stopPropagation()}
           >
-            <option value="off">手动</option>
+            <option value="off">{t.yoloManual}</option>
             <option value="safe">Safe</option>
             <option value="full">Full-Auto</option>
           </select>
           <button
             className="restart-btn"
             onClick={e => { e.stopPropagation(); onRestart() }}
-            title="重启进程"
+            title={t.restartTitle}
           >
             ↻
           </button>
           <button
             className="close-btn"
             onClick={e => { e.stopPropagation(); onClose() }}
-            title="关闭"
+            title={t.closeTitle}
           >
             ×
           </button>
