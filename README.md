@@ -1,18 +1,21 @@
 <div align="center">
 
+<img src="assets/logo.svg" alt="EasyAgentCli Logo" width="180">
+
 # EasyAgentCli
 
-**Run Claude Code, Codex, and Shell sessions side by side.**
+**Let AI agents keep working after you leave your desk.**
+**Monitor and control terminals from your phone via Feishu, Discord, Telegram, or Openclaw.**
 
 [![Electron](https://img.shields.io/badge/Electron-41-47848F?logo=electron&logoColor=white)](https://electronjs.org)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)](https://reactjs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?logo=typescript&logoColor=white)](https://typescriptlang.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/haibindev/EasyAgentCli?style=social)](https://github.com/haibindev/EasyAgentCli)
 
-A multi-pane terminal manager built for AI-powered development workflows.
-Manage multiple agent sessions in a configurable grid layout, with remote control via Feishu, Discord, Telegram, or Openclaw.
+[中文说明](README_CN.md) · [Report Bug](.github/ISSUE_TEMPLATE/bug_report.md) · [Request Feature](.github/ISSUE_TEMPLATE/feature_request.md)
 
-[中文说明](README_CN.md)
+**If you find this useful, please consider giving it a ⭐ Star — it helps a lot!**
 
 </div>
 
@@ -20,12 +23,19 @@ Manage multiple agent sessions in a configurable grid layout, with remote contro
 
 ## Why EasyAgentCli?
 
-Modern AI coding assistants run in terminals — but juggling multiple sessions across tabs gets messy fast. EasyAgentCli gives you a **single window** where all your agents live side by side, with smart automation and remote monitoring built in.
+AI coding agents like Claude Code and Codex run long tasks — but they constantly need your confirmation. **You can't walk away without missing a prompt and blocking progress.**
 
-- Launch **Claude Code**, **Codex**, or plain **Shell** sessions in one click
-- Arrange them in a **matrix grid** (1×1 up to 4×4) — no manual resizing needed
-- Let **YOLO auto-answer** handle confirmations while you focus on what matters
-- Walk away and monitor everything from **Feishu / Discord / Telegram / Openclaw** on your phone
+EasyAgentCli bridges your terminal to your phone:
+
+1. You're running 3 Claude Code sessions, working on different repos
+2. One hits a confirmation prompt — you don't want to stare at the screen
+3. **Enable Leave Mode** → go to a meeting, grab lunch, head home
+4. Claude needs confirmation → instant notification on your phone (Feishu / Discord / Telegram)
+5. Reply `y` from your phone → terminal continues
+6. Task complete → you get a ✅ notification
+7. Anytime: send `/screen` to see the terminal, `/log 50` for recent output
+
+**One line: turn your AI agent terminal into a chat conversation on your phone.**
 
 ## Screenshot
 
@@ -44,11 +54,11 @@ Modern AI coding assistants run in terminals — but juggling multiple sessions 
 <tr>
 <td width="50%">
 
-### 🖥️ Multi-Pane Grid
-Configurable matrix layout from 1×1 to 4×4. CSS Grid ensures stable rendering — no flashing when adding or removing panes. Overflow auto-expands rows.
+### 📡 Remote Control via IM
+The killer feature. Enable **Leave Mode** and terminal events (confirmations, completions, errors) are forwarded to your IM. Reply from your phone to approve, reject, or send commands. Supports **4 channels**: Feishu Bot, Discord Bot, Telegram Bot, and Openclaw relay.
 
-### 🤖 AI Agent Support
-First-class support for Claude Code and Codex. Also spawns any shell variant: CMD, PowerShell, Git Bash, or WSL.
+### 🚶 Leave Mode
+One click to activate. Walk away with confidence — every confirmation prompt, task completion, and error is pushed to your phone in real-time.
 
 ### ⚡ YOLO Auto-Answer
 Three automation levels:
@@ -59,8 +69,11 @@ Three automation levels:
 </td>
 <td width="50%">
 
-### 📡 Remote Control
-Walk away from your desk. Terminal events (confirmations, completions, errors) are forwarded to your IM. Reply to approve, reject, or send commands.
+### 🖥️ Multi-Pane Grid
+Configurable matrix layout from 1×1 to 4×4. CSS Grid ensures stable rendering — no flashing when adding or removing panes. Overflow auto-expands rows.
+
+### 🤖 AI Agent Support
+First-class support for Claude Code and Codex. Also spawns any shell variant: CMD, PowerShell, Git Bash, or WSL.
 
 ### 🔍 Smart Detection
 Detects confirm prompts, task completion, errors, and idle timeouts. Status badges update in real-time.
@@ -173,6 +186,22 @@ Renderer (React + xterm.js)
 | Discord | discord.js |
 | Telegram | Bot API (zero dependencies) |
 
+## Contributing
+
+Contributions are welcome! Feel free to:
+
+- Open an [issue](https://github.com/haibindev/EasyAgentCli/issues) to report bugs or suggest features
+- Submit a pull request
+- Star the project to show your support
+
 ## License
 
 MIT © [haibindev](https://github.com/haibindev)
+
+---
+
+<div align="center">
+
+[![Star History Chart](https://api.star-history.com/svg?repos=haibindev/EasyAgentCli&type=Date)](https://star-history.com/#haibindev/EasyAgentCli&Date)
+
+</div>

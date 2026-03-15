@@ -127,9 +127,11 @@ function saveSession(): void {
 function restoreSession(): void {
   try {
     const raw = readFileSync(getSessionPath(), 'utf-8')
-    const configs = JSON.parse(raw) as Array<{ type: string; cwd: string; yoloLevel: string }>
+    const configs = JSON.parse(raw) as Array<{ type: string; cwd: string; yoloLevel: string; sessionId?: string }>
     for (const cfg of configs) {
-      const pane = ptyManager.create(cfg.type, cfg.cwd)
+      // For Claude panes with a saved sessionId, resume that exact conversation
+      const opts = cfg.sessionId ? { resumeSessionId: cfg.sessionId } : undefined
+      const pane = ptyManager.create(cfg.type, cfg.cwd, opts)
       if (cfg.yoloLevel !== 'off') {
         ptyManager.setYolo(pane.id, cfg.yoloLevel as 'safe' | 'full')
       }

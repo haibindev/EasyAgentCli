@@ -1,4 +1,8 @@
 import { EventEmitter } from 'events'
+import { randomUUID } from 'crypto'
+import { readFileSync } from 'fs'
+import { join } from 'path'
+import { homedir } from 'os'
 import * as pty from 'node-pty'
 import { Analyzer, type AnalyzerEvent } from './bridge/analyzer'
 
@@ -22,6 +26,7 @@ interface PaneInternal extends PaneInfo {
   shellVariant: string   // for shell type: 'cmd' | 'powershell' | 'gitbash' | 'wsl'
   ring: string[]
   quietTimer: ReturnType<typeof setTimeout> | null
+  sessionId: string | null  // Claude Code session UUID for resume
 }
 
 const RISK_HIGH = /rm\s+-|drop\s+|git\s+push|sudo|format|truncate|delete/i
@@ -47,7 +52,11 @@ export class PtyManager extends EventEmitter {
   private analyzer = new Analyzer()
   private nextId = 0
 
-  create(typeStr: string, cwd: string): PaneInfo {
+  /**
+   * Create a new pane.
+   * @param opts.resumeSessionId — if set, resume this Claude session instead of starting fresh
+   */
+  create(typeStr: string, cwd: string, opts?: { resumeSessionId?: string }): PaneInfo {
     // typeStr can be 'claude', 'codex', 'shell', or 'shell:variant'
     let type: PaneType
     let shellVariant = ''
@@ -64,7 +73,23 @@ export class PtyManager extends EventEmitter {
     const id = `pane-${num}`
     const title = `${displayName} #${num}`
 
-    const { cmd, args } = this.resolveCmd(type, shellVariant)
+    // For agent panes: track session ID for resume on restart
+    let sessionId: string | null = null
+    if (type === 'claude') {
+      // Claude Code supports --session-id to assign UUID at launch
+      sessionId = opts?.resumeSessionId ?? randomUUID()
+    } else if (type === 'codex' && opts?.resumeSessionId) {
+      // Codex: we have a saved session ID to resume
+      sessionId = opts.resumeSessionId
+    }
+
+    // For Codex fresh start: snapshot session_index.jsonl line count before spawn
+    let codexIndexLinesBefore = 0
+    if (type === 'codex' && !opts?.resumeSessionId) {
+      codexIndexLinesBefore = this.countCodexSessions()
+    }
+
+    const { cmd, args } = this.resolveCmd(type, shellVariant, sessionId, !!opts?.resumeSessionId)
 
     let p: pty.IPty
     try {
@@ -93,11 +118,17 @@ export class PtyManager extends EventEmitter {
       ptyGeneration: 0,
       shellVariant,
       ring: [],
-      quietTimer: null
+      quietTimer: null,
+      sessionId
     }
 
     this.panes.set(id, pane)
     this.attachPtyHandlers(pane, p, pane.ptyGeneration)
+
+    // For Codex fresh start: detect the new session ID after Codex creates it
+    if (type === 'codex' && !opts?.resumeSessionId) {
+      this.captureCodexSessionId(pane, codexIndexLinesBefore)
+    }
 
     this.emitListUpdate()
     return this.toInfo(pane)
@@ -115,8 +146,8 @@ export class PtyManager extends EventEmitter {
     if (pane.quietTimer) clearTimeout(pane.quietTimer)
     try { pane.pty.kill() } catch { /* ignore */ }
 
-    // Respawn with same config
-    const { cmd, args } = this.resolveCmd(pane.type, pane.shellVariant)
+    // Respawn with same config — for Claude, resume the same session
+    const { cmd, args } = this.resolveCmd(pane.type, pane.shellVariant, pane.sessionId, !!pane.sessionId)
     let p: pty.IPty
     try {
       p = pty.spawn(cmd, args, {
@@ -130,7 +161,7 @@ export class PtyManager extends EventEmitter {
       })
     }
 
-    // Reset pane state, keep id/title/cwd/yoloLevel
+    // Reset pane state, keep id/title/cwd/yoloLevel/sessionId
     pane.pty = p
     pane.ring = []
     pane.status = 'running'
@@ -227,16 +258,103 @@ export class PtyManager extends EventEmitter {
     this.panes.clear()
   }
 
-  private resolveCmd(type: PaneType, shellVariant = ''): { cmd: string; args: string[] } {
+  /**
+   * Resolve the command and args for a pane type.
+   * For Claude: uses --session-id on fresh start, --resume on restore.
+   */
+  private resolveCmd(
+    type: PaneType,
+    shellVariant: string,
+    sessionId?: string | null,
+    isResume?: boolean
+  ): { cmd: string; args: string[] } {
     const isWin = process.platform === 'win32'
     switch (type) {
-      case 'claude':
-        return { cmd: isWin ? 'cmd.exe' : 'claude', args: isWin ? ['/c', 'claude'] : [] }
-      case 'codex':
-        return { cmd: isWin ? 'cmd.exe' : 'codex', args: isWin ? ['/c', 'codex'] : [] }
+      case 'claude': {
+        const claudeArgs: string[] = []
+        if (sessionId) {
+          if (isResume) {
+            // Restoring from saved session — resume that exact conversation
+            claudeArgs.push('--resume', sessionId)
+          } else {
+            // Fresh launch — assign a UUID so we can resume it later
+            claudeArgs.push('--session-id', sessionId)
+          }
+        }
+        if (isWin) {
+          return { cmd: 'cmd.exe', args: ['/c', 'claude', ...claudeArgs] }
+        }
+        return { cmd: 'claude', args: claudeArgs }
+      }
+      case 'codex': {
+        if (sessionId && isResume) {
+          // Resume a specific Codex session
+          const codexArgs = ['resume', sessionId]
+          if (isWin) {
+            return { cmd: 'cmd.exe', args: ['/c', 'codex', ...codexArgs] }
+          }
+          return { cmd: 'codex', args: codexArgs }
+        }
+        // Fresh start
+        if (isWin) {
+          return { cmd: 'cmd.exe', args: ['/c', 'codex'] }
+        }
+        return { cmd: 'codex', args: [] }
+      }
       case 'shell':
         return this.resolveShell(shellVariant, isWin)
     }
+  }
+
+  /** Path to Codex session index file */
+  private get codexIndexPath(): string {
+    return join(homedir(), '.codex', 'session_index.jsonl')
+  }
+
+  /** Count lines in Codex session_index.jsonl */
+  private countCodexSessions(): number {
+    try {
+      const content = readFileSync(this.codexIndexPath, 'utf-8')
+      return content.trim().split('\n').length
+    } catch {
+      return 0
+    }
+  }
+
+  /**
+   * After Codex starts, poll session_index.jsonl for the new session entry.
+   * Codex writes a new line when the session is created.
+   */
+  private captureCodexSessionId(pane: PaneInternal, linesBefore: number): void {
+    let attempts = 0
+    const maxAttempts = 30  // try for up to 30 seconds
+
+    const check = (): void => {
+      attempts++
+      if (!this.panes.has(pane.id)) return  // pane was closed
+
+      try {
+        const content = readFileSync(this.codexIndexPath, 'utf-8')
+        const lines = content.trim().split('\n')
+        if (lines.length > linesBefore) {
+          // New session(s) appeared — take the latest one
+          const lastLine = lines[lines.length - 1]
+          const entry = JSON.parse(lastLine) as { id: string; thread_name?: string }
+          if (entry.id) {
+            pane.sessionId = entry.id
+            console.log(`[PTY] Captured Codex session ID for ${pane.id}: ${entry.id}`)
+            return
+          }
+        }
+      } catch { /* file not found or parse error */ }
+
+      if (attempts < maxAttempts) {
+        setTimeout(check, 1000)
+      }
+    }
+
+    // Start checking after a short delay (Codex needs time to initialize)
+    setTimeout(check, 2000)
   }
 
   private resolveShell(variant: string, isWin: boolean): { cmd: string; args: string[] } {
@@ -299,11 +417,12 @@ export class PtyManager extends EventEmitter {
   }
 
   /** Returns serializable session config for persistence */
-  getSessionConfig(): Array<{ type: string; cwd: string; yoloLevel: string }> {
+  getSessionConfig(): Array<{ type: string; cwd: string; yoloLevel: string; sessionId?: string }> {
     return Array.from(this.panes.values()).map(p => ({
       type: p.shellVariant ? `shell:${p.shellVariant}` : p.type,
       cwd: p.cwd,
-      yoloLevel: p.yoloLevel
+      yoloLevel: p.yoloLevel,
+      ...(p.sessionId ? { sessionId: p.sessionId } : {})
     }))
   }
 
