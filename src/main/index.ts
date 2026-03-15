@@ -8,6 +8,7 @@ import { MessageRouter } from './bridge/message-router'
 import { FeishuAdapter, type FeishuConfig } from './bridge/adapters/feishu'
 import { DiscordAdapter, type DiscordConfig } from './bridge/adapters/discord'
 import { OpenclawAdapter, type OpenclawConfig } from './bridge/adapters/openclaw'
+import { TelegramAdapter, type TelegramConfig } from './bridge/adapters/telegram'
 
 let mainWindow: BrowserWindow | null = null
 const ptyManager = new PtyManager()
@@ -23,6 +24,7 @@ interface AdapterConfigs {
   feishu?: FeishuConfig & { enabled: boolean }
   discord?: DiscordConfig & { enabled: boolean }
   openclaw?: OpenclawConfig & { enabled: boolean }
+  telegram?: TelegramConfig & { enabled: boolean }
 }
 
 function getConfigDir(): string {
@@ -78,6 +80,13 @@ async function startAdapter(name: string, configs: AdapterConfigs): Promise<stri
       return adapter.isConnected() ? 'connected' : 'connecting'
     }
 
+    if (name === 'telegram' && configs.telegram?.enabled) {
+      const adapter = new TelegramAdapter(configs.telegram, onMsg)
+      messageRouter.addAdapter(adapter)
+      await adapter.start()
+      return adapter.isConnected() ? 'connected' : 'connecting'
+    }
+
     return 'disabled'
   } catch (err) {
     console.error(`[Adapter] Failed to start ${name}:`, err)
@@ -90,6 +99,7 @@ async function initAdapters(): Promise<void> {
   if (configs.feishu?.enabled) await startAdapter('feishu', configs)
   if (configs.discord?.enabled) await startAdapter('discord', configs)
   if (configs.openclaw?.enabled) await startAdapter('openclaw', configs)
+  if (configs.telegram?.enabled) await startAdapter('telegram', configs)
 }
 
 async function stopAllAdapters(): Promise<void> {

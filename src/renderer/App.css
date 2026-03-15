@@ -628,17 +628,65 @@ html, body, #root {
 }
 
 .adapter-section {
-  margin-bottom: 16px;
+  margin-bottom: 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 12px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.adapter-section.enabled {
+  border-color: var(--green);
 }
 
 .adapter-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  padding: 14px 16px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.adapter-header:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.adapter-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.adapter-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.adapter-configured-hint {
+  font-size: 10px;
+  color: var(--text-dim);
+  background: rgba(110, 118, 129, 0.15);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.adapter-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.adapter-expand-arrow {
+  font-size: 22px;
+  color: var(--text-dim);
+  transition: transform 0.2s;
+  display: inline-block;
+  line-height: 1;
+}
+
+.adapter-expand-arrow.open {
+  transform: rotate(90deg);
 }
 
 .adapter-toggle {
@@ -654,23 +702,80 @@ html, body, #root {
   cursor: pointer;
 }
 
+.adapter-icon {
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
 .adapter-status {
   font-size: 11px;
   color: var(--text-dim);
-  padding: 1px 6px;
-  border-radius: 3px;
-  background: rgba(110, 118, 129, 0.15);
 }
 
 .adapter-status.connected {
   color: var(--green);
-  background: rgba(63, 185, 80, 0.15);
 }
+
+/* ── Toggle switch ── */
+
+.toggle-switch {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border-radius: 11px;
+  border: none;
+  background: var(--border);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.toggle-switch:hover {
+  background: #484f58;
+}
+
+.toggle-switch.on {
+  background: var(--green);
+}
+
+.toggle-switch.on:hover {
+  background: #2ea043;
+}
+
+.toggle-switch.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.2s;
+  pointer-events: none;
+}
+
+.toggle-switch.on .toggle-knob {
+  left: 20px;
+}
+
+/* ── Fields area ── */
 
 .adapter-fields {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 0 12px 12px;
+  transition: opacity 0.2s;
+}
+
+.adapter-fields.dimmed {
+  opacity: 0.5;
 }
 
 .adapter-fields input {

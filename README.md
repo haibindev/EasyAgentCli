@@ -10,7 +10,7 @@
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 A multi-pane terminal manager built for AI-powered development workflows.
-Manage multiple agent sessions in a configurable grid layout, with remote control via Feishu, Discord, or Openclaw.
+Manage multiple agent sessions in a configurable grid layout, with remote control via Feishu, Discord, Telegram, or Openclaw.
 
 [中文说明](README_CN.md)
 
@@ -25,7 +25,7 @@ Modern AI coding assistants run in terminals — but juggling multiple sessions 
 - Launch **Claude Code**, **Codex**, or plain **Shell** sessions in one click
 - Arrange them in a **matrix grid** (1×1 up to 4×4) — no manual resizing needed
 - Let **YOLO auto-answer** handle confirmations while you focus on what matters
-- Walk away and monitor everything from **Feishu / Discord / Openclaw** on your phone
+- Walk away and monitor everything from **Feishu / Discord / Telegram / Openclaw** on your phone
 
 ## Preview
 
@@ -120,6 +120,7 @@ Click **"🚶 Leave Mode"** in the toolbar. Terminal events are forwarded to all
 |---------|------------|------|
 | **Feishu** | WebSocket (no public URL needed) | App ID + App Secret |
 | **Discord** | Gateway connection | Bot Token |
+| **Telegram** | Long-polling (no webhook needed) | Bot Token (@BotFather) |
 | **Openclaw** | WebSocket client → relay server | Relay URL |
 
 Configure adapters via the ⚙ button in the toolbar.
@@ -151,6 +152,7 @@ Electron Main Process
     └── adapters/
         ├── feishu.ts     → Feishu Bot (@larksuiteoapi/node-sdk)
         ├── discord.ts    → Discord Bot (discord.js)
+        ├── telegram.ts   → Telegram Bot (HTTP long-polling)
         └── openclaw.ts   → Openclaw WebSocket relay
 
 Renderer (React + xterm.js)
@@ -176,6 +178,7 @@ Renderer (React + xterm.js)
 | WebSocket | ws |
 | Feishu | @larksuiteoapi/node-sdk |
 | Discord | discord.js |
+| Telegram | Bot API (zero dependencies) |
 
 ## License
 
