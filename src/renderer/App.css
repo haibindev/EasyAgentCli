@@ -1,0 +1,736 @@
+/* === Global === */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg: #0d1117;
+  --bg-header: #161b22;
+  --border: #30363d;
+  --text: #c9d1d9;
+  --text-dim: #6e7681;
+  --accent-claude: #2ea043;
+  --accent-codex: #388bfd;
+  --accent-shell: #6e7681;
+  --amber: #e3b341;
+  --red: #f85149;
+  --blue: #58a6ff;
+  --green: #3fb950;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  font-family: -apple-system, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  overflow: hidden;
+  -webkit-app-region: no-drag;
+}
+
+/* === App Layout === */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* (LeaveBanner removed — integrated into StatusBar) */
+
+/* === Toolbar === */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+  min-height: 38px;
+}
+
+.toolbar-left {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+.toolbar-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  justify-content: center;
+  -webkit-app-region: no-drag;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+  padding-right: 140px; /* leave space for Windows title bar overlay buttons */
+}
+
+.toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.toolbar-btn:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+.toolbar-btn.active {
+  background: rgba(227, 179, 65, 0.15);
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+.toolbar-btn .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* === Pane Area === */
+.pane-area {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+/* === Grid Cell === */
+.grid-cell {
+  overflow: hidden;
+  background: var(--bg);
+  min-width: 0;
+  min-height: 0;
+}
+
+/* === Terminal Pane === */
+.terminal-pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--bg);
+}
+
+.terminal-pane.active .pane-header {
+  background: #1c2333;
+}
+
+.pane-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  min-height: 32px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.pane-type-bar {
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.pane-title {
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.pane-title-input {
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--blue);
+  border-radius: 3px;
+  padding: 0 4px;
+  outline: none;
+  width: 120px;
+  font-family: inherit;
+}
+
+.pane-cwd {
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+/* Event badge in pane header */
+.pane-event-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.pane-event-confirm {
+  background: rgba(227, 179, 65, 0.2);
+  color: var(--amber);
+}
+
+.pane-event-done {
+  background: rgba(46, 160, 67, 0.2);
+  color: var(--accent-claude);
+}
+
+.pane-event-error {
+  background: rgba(248, 81, 73, 0.2);
+  color: var(--red);
+}
+
+.pane-event-idle {
+  background: rgba(110, 118, 129, 0.15);
+  color: var(--text-dim);
+}
+
+.pane-controls {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.yolo-select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 1px 4px;
+  cursor: pointer;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.restart-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 15px;
+  cursor: pointer;
+  padding: 0 3px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.restart-btn:hover {
+  color: var(--blue);
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.close-btn:hover {
+  color: var(--red);
+}
+
+.terminal-container {
+  flex: 1;
+  overflow: hidden;
+}
+
+/* === Toolbar center hints === */
+.toolbar-hint {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.toolbar-hint-leave {
+  background: rgba(227, 179, 65, 0.15);
+  color: var(--amber);
+}
+
+.toolbar-hint-overflow {
+  background: rgba(227, 179, 65, 0.1);
+  color: var(--amber);
+}
+
+/* === Status Bar === */
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 12px;
+  background: var(--bg-header);
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-dim);
+  min-height: 24px;
+  flex-shrink: 0;
+}
+
+.status-panes {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex: 1;
+  min-width: 0;
+  scrollbar-width: none;
+}
+
+.status-panes::-webkit-scrollbar {
+  height: 0;
+}
+
+.pane-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  transition: background 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pane-status:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.pane-status-active {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.status-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.bridge-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.status-pane-count {
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+/* === Empty State === */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 16px;
+  color: var(--text-dim);
+}
+
+.empty-state h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.empty-state p {
+  font-size: 14px;
+}
+
+.empty-state .quick-btns {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.empty-state .quick-btn {
+  padding: 10px 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-header);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 120px;
+}
+
+.empty-state .quick-btn:hover {
+  border-color: var(--blue);
+  background: rgba(88, 166, 255, 0.08);
+}
+
+.empty-state .quick-btn .label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* === New Pane Dialog === */
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.dialog {
+  background: var(--bg-header);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  min-width: 400px;
+  max-width: 500px;
+}
+
+.dialog h3 {
+  margin-bottom: 16px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.dialog-field {
+  margin-bottom: 12px;
+}
+
+.dialog-field label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.dialog-select {
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: -apple-system, 'Segoe UI', sans-serif;
+  cursor: pointer;
+}
+
+.dialog-select:focus {
+  outline: none;
+  border-color: var(--blue);
+}
+
+.dialog-field .input-row {
+  display: flex;
+  gap: 6px;
+}
+
+.dialog-field input {
+  flex: 1;
+  padding: 6px 10px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: -apple-system, 'Segoe UI', sans-serif;
+}
+
+.dialog-field input:focus {
+  outline: none;
+  border-color: var(--blue);
+}
+
+.dialog-field .browse-btn {
+  padding: 6px 12px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.dialog-field .browse-btn:hover {
+  border-color: var(--blue);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.dialog-actions button {
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+}
+
+.btn-cancel {
+  background: transparent;
+  color: var(--text);
+}
+
+.btn-create {
+  background: var(--blue);
+  color: #fff;
+  border-color: var(--blue) !important;
+}
+
+.btn-create:hover {
+  opacity: 0.9;
+}
+
+/* Layout selector */
+.layout-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.layout-label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.layout-select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-family: inherit;
+  position: relative;
+  z-index: 10;
+  min-width: 100px;
+}
+
+.layout-select:focus {
+  outline: none;
+  border-color: var(--blue);
+}
+
+/* Empty grid slot */
+.empty-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  background: var(--bg);
+  border: 1px dashed var(--border);
+}
+
+.empty-slot-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.empty-slot-hint {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.empty-slot-btns {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.empty-slot-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-header);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.empty-slot-btn:hover {
+  border-color: var(--blue);
+  background: rgba(88, 166, 255, 0.08);
+}
+
+/* === Adapter Settings Dialog === */
+.adapter-dialog {
+  max-height: 80vh;
+  overflow-y: auto;
+  min-width: 440px;
+}
+
+.adapter-section {
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.adapter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.adapter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.adapter-toggle input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.adapter-status {
+  font-size: 11px;
+  color: var(--text-dim);
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(110, 118, 129, 0.15);
+}
+
+.adapter-status.connected {
+  color: var(--green);
+  background: rgba(63, 185, 80, 0.15);
+}
+
+.adapter-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.adapter-fields input {
+  padding: 6px 10px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.adapter-fields input:focus {
+  outline: none;
+  border-color: var(--blue);
+}
+
+.adapter-fields .btn-create {
+  align-self: flex-end;
+  padding: 4px 12px;
+  font-size: 12px;
+}
+
+/* === Scrollbar (global dark theme) === */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(139, 148, 158, 0.25);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 148, 158, 0.4);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* xterm.js scrollbar override */
+.xterm-viewport::-webkit-scrollbar {
+  width: 8px;
+}
+
+.xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.xterm-viewport::-webkit-scrollbar-thumb {
+  background: rgba(139, 148, 158, 0.2);
+  border-radius: 4px;
+}
+
+.xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 148, 158, 0.35);
+}
