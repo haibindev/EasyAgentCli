@@ -148,12 +148,15 @@ function safeSend(channel: string, data: unknown): void {
 }
 
 function createWindow(): void {
+  const iconPath = join(__dirname, '../../build/icon.png')
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 800,
     minHeight: 500,
     show: false,
+    icon: iconPath,
     backgroundColor: '#0d1117',
     titleBarStyle: 'hidden',
     titleBarOverlay: {

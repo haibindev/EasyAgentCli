@@ -1,20 +1,55 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#6366f1"/>
-      <stop offset="100%" stop-color="#4f46e5"/>
+      <stop offset="0%" stop-color="#161b22"/>
+      <stop offset="100%" stop-color="#0d1117"/>
+    </linearGradient>
+    <linearGradient id="bubble-fill" x1="310" y1="300" x2="450" y2="440" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2ea043"/>
+      <stop offset="100%" stop-color="#3fb950"/>
     </linearGradient>
   </defs>
 
-  <!-- Rounded square background -->
+  <!-- Background rounded square -->
   <rect x="16" y="16" width="480" height="480" rx="96" fill="url(#bg)"/>
+  <rect x="16" y="16" width="480" height="480" rx="96" fill="none" stroke="#30363d" stroke-width="2"/>
 
-  <!-- Terminal prompt ">_" -->
-  <path d="M100 190 L190 256 L100 322" stroke="white" stroke-width="36" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-  <line x1="210" y1="322" x2="310" y2="322" stroke="white" stroke-width="36" stroke-linecap="round"/>
+  <!-- 2x2 Grid panes -->
+  <!-- Top-left -->
+  <rect x="72" y="100" width="150" height="120" rx="14" fill="rgba(255,255,255,0.06)" stroke="#30363d" stroke-width="2.5"/>
+  <!-- Top-right -->
+  <rect x="238" y="100" width="150" height="120" rx="14" fill="rgba(255,255,255,0.06)" stroke="#30363d" stroke-width="2.5"/>
+  <!-- Bottom-left -->
+  <rect x="72" y="236" width="150" height="120" rx="14" fill="rgba(255,255,255,0.06)" stroke="#30363d" stroke-width="2.5"/>
+  <!-- Bottom-right -->
+  <rect x="238" y="236" width="150" height="120" rx="14" fill="rgba(255,255,255,0.06)" stroke="#30363d" stroke-width="2.5"/>
 
-  <!-- Signal arcs (wifi/broadcast) - right side -->
-  <path d="M350 216 A50 50 0 0 1 350 296" stroke="white" stroke-width="24" stroke-linecap="round" fill="none" opacity="0.5"/>
-  <path d="M385 186 A85 85 0 0 1 385 326" stroke="white" stroke-width="24" stroke-linecap="round" fill="none" opacity="0.75"/>
-  <path d="M420 156 A120 120 0 0 1 420 356" stroke="white" stroke-width="24" stroke-linecap="round" fill="none"/>
+  <!-- Cursor prompts: green for Claude, blue for Codex -->
+  <!-- Top-left: Claude green -->
+  <rect x="88" y="148" width="50" height="7" rx="3" fill="#2ea043" opacity="0.7"/>
+  <rect x="88" y="163" width="90" height="6" rx="3" fill="rgba(201,209,217,0.2)"/>
+  <rect x="88" y="176" width="65" height="6" rx="3" fill="rgba(201,209,217,0.15)"/>
+
+  <!-- Top-right: Codex blue -->
+  <rect x="254" y="148" width="50" height="7" rx="3" fill="#388bfd" opacity="0.7"/>
+  <rect x="254" y="163" width="80" height="6" rx="3" fill="rgba(201,209,217,0.2)"/>
+  <rect x="254" y="176" width="100" height="6" rx="3" fill="rgba(201,209,217,0.15)"/>
+
+  <!-- Bottom-left: Claude green -->
+  <rect x="88" y="284" width="50" height="7" rx="3" fill="#2ea043" opacity="0.7"/>
+  <rect x="88" y="299" width="110" height="6" rx="3" fill="rgba(201,209,217,0.2)"/>
+  <rect x="88" y="312" width="70" height="6" rx="3" fill="rgba(201,209,217,0.15)"/>
+
+  <!-- Bottom-right: Shell gray -->
+  <rect x="254" y="284" width="50" height="7" rx="3" fill="#6e7681" opacity="0.7"/>
+  <rect x="254" y="299" width="95" height="6" rx="3" fill="rgba(201,209,217,0.2)"/>
+  <rect x="254" y="312" width="60" height="6" rx="3" fill="rgba(201,209,217,0.15)"/>
+
+  <!-- Chat bubble popping out from bottom-right corner -->
+  <g>
+    <path d="M315 310 Q315 290 335 290 L435 290 Q455 290 455 310 L455 385 Q455 405 435 405 L385 405 L360 440 L360 405 L335 405 Q315 405 315 385 Z"
+          fill="url(#bubble-fill)"/>
+    <!-- Checkmark inside -->
+    <path d="M365 345 L380 360 L410 325" stroke="white" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
 </svg>

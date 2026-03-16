@@ -37,14 +37,17 @@
   "build": {
     "appId": "com.hbstr.easy-agent-cli",
     "productName": "EasyAgentCli",
+    "icon": "build/icon",
     "directories": {
       "output": "dist-electron"
     },
     "files": [
-      "out/**/*"
+      "out/**/*",
+      "build/icon.png"
     ],
     "win": {
-      "target": "dir"
+      "target": "dir",
+      "icon": "build/icon.ico"
     },
     "asarUnpack": [
       "**/node_modules/node-pty/**/*"
