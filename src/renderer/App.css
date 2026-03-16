@@ -658,6 +658,13 @@ html, body, #root {
   max-height: 80vh;
   overflow-y: auto;
   min-width: 440px;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-tab-content {
+  min-height: 320px;
+  flex: 1;
 }
 
 .adapter-section {

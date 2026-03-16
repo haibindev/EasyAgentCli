@@ -104,13 +104,6 @@ export default function AdapterSettings({ onClose }: Props) {
         setNotify({ ...DEFAULT_NOTIFY, ...loaded._notify })
       }
       setConfigs(loaded)
-      // Auto-expand adapters that have been configured
-      const exp: Record<string, boolean> = {}
-      for (const [name, cfg] of Object.entries(loaded)) {
-        if (name === '_notify') continue
-        if (cfg && hasCredentials(name, cfg)) exp[name] = true
-      }
-      setExpanded(exp)
     })
     window.api.getAdapterStatus().then(setStatus)
   }, [])
@@ -224,6 +217,7 @@ export default function AdapterSettings({ onClose }: Props) {
           </button>
         </div>
 
+        <div className="settings-tab-content">
         {tab === 'channels' && (
           <>
             {adapters.map(({ key, label, icon, fields, extra }) => {
@@ -325,6 +319,7 @@ export default function AdapterSettings({ onClose }: Props) {
             </button>
           </div>
         )}
+        </div>
 
         <div className="dialog-actions">
           <button className="btn-cancel" onClick={onClose}>{t.close}</button>
