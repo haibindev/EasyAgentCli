@@ -105,13 +105,28 @@ export default function TerminalPane({ pane, active, onActivate, onClose, onRest
     termRef.current = term
     fitRef.current = fitAddon
 
-    // Fit after opening (need a frame for DOM to settle)
-    requestAnimationFrame(() => {
+    // Track last known size to avoid no-op resizes (ConPTY repaints on every resize)
+    let lastCols = 0
+    let lastRows = 0
+    // Suppress output flag — absorbs ConPTY repaint data during resize
+    let suppressOutput = false
+
+    const safeFit = () => {
       try {
         fitAddon.fit()
-        window.api.resizePane(pane.id, term.cols, term.rows)
+        if (term.cols !== lastCols || term.rows !== lastRows) {
+          lastCols = term.cols
+          lastRows = term.rows
+          // Briefly suppress output to absorb ConPTY viewport repaint
+          suppressOutput = true
+          window.api.resizePane(pane.id, term.cols, term.rows)
+          setTimeout(() => { suppressOutput = false }, 150)
+        }
       } catch { /* ignore */ }
-    })
+    }
+
+    // Fit after opening (need a frame for DOM to settle)
+    requestAnimationFrame(safeFit)
 
     // Copy support: Ctrl+C copies selection (otherwise sends ^C), Ctrl+Shift+C always copies
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
@@ -153,8 +168,9 @@ export default function TerminalPane({ pane, active, onActivate, onClose, onRest
     })
 
     // Output: main process PTY → terminal display
+    // Skip output during resize to absorb ConPTY viewport repaint
     const unsubOutput = window.api.onPaneOutput((msg) => {
-      if (msg.id === pane.id) {
+      if (msg.id === pane.id && !suppressOutput) {
         term.write(msg.data)
       }
     })
@@ -171,10 +187,9 @@ export default function TerminalPane({ pane, active, onActivate, onClose, onRest
       if (msg.id === pane.id) {
         term.clear()
         term.reset()
-        try {
-          fitAddon.fit()
-          window.api.resizePane(pane.id, term.cols, term.rows)
-        } catch { /* ignore */ }
+        lastCols = 0
+        lastRows = 0
+        safeFit()
       }
     })
 
@@ -182,12 +197,7 @@ export default function TerminalPane({ pane, active, onActivate, onClose, onRest
     let resizeTimer: ReturnType<typeof setTimeout> | null = null
     const resizeObserver = new ResizeObserver(() => {
       if (resizeTimer) clearTimeout(resizeTimer)
-      resizeTimer = setTimeout(() => {
-        try {
-          fitAddon.fit()
-          window.api.resizePane(pane.id, term.cols, term.rows)
-        } catch { /* ignore */ }
-      }, 50)
+      resizeTimer = setTimeout(safeFit, 80)
     })
     resizeObserver.observe(containerRef.current)
 
