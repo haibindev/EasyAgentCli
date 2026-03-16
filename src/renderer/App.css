@@ -830,21 +830,47 @@ html, body, #root {
   font-size: 12px;
 }
 
-/* === Notify settings in adapter dialog === */
-.notify-settings {
-  margin-top: 12px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+/* === Settings dialog tabs === */
+.settings-tabs {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  gap: 0;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border);
 }
 
-.notify-settings h4 {
+.settings-tab {
+  padding: 8px 20px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim);
   font-size: 13px;
   font-weight: 600;
-  margin-bottom: 2px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.settings-tab:hover {
+  color: var(--text);
+}
+
+.settings-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--blue);
+}
+
+/* === Notify settings tab === */
+.notify-settings {
+  padding: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.notify-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.5;
 }
 
 .notify-row {

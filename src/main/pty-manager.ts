@@ -148,7 +148,9 @@ export class PtyManager extends EventEmitter {
     if (pane.heartbeatTimer) clearInterval(pane.heartbeatTimer)
     try { pane.pty.kill() } catch { /* ignore */ }
 
-    const { cmd, args } = this.resolveCmd(pane.type, pane.shellVariant, pane.sessionId, !!pane.sessionId, pane.bypassPermissions)
+    // On in-app restart: use --continue (safe fallback) instead of --resume <uuid>
+    // which fails with "No conversation found" if the session was never created
+    const { cmd, args } = this.resolveCmd(pane.type, pane.shellVariant, pane.sessionId, false, pane.bypassPermissions)
     let p: pty.IPty
     try {
       p = pty.spawn(cmd, args, {
@@ -309,12 +311,12 @@ export class PtyManager extends EventEmitter {
         if (bypass) {
           claudeArgs.push('--dangerously-skip-permissions')
         }
-        if (sessionId) {
-          if (isResume) {
-            claudeArgs.push('--resume', sessionId)
-          } else {
-            claudeArgs.push('--session-id', sessionId)
-          }
+        if (isResume && sessionId) {
+          // App-level session restore: resume specific session
+          claudeArgs.push('--resume', sessionId)
+        } else if (sessionId) {
+          // Fresh start or in-app restart: use --continue to pick up where left off
+          claudeArgs.push('--continue')
         }
         if (isWin) {
           return { cmd: 'cmd.exe', args: ['/c', 'claude', ...claudeArgs] }

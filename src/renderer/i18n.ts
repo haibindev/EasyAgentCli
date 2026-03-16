@@ -84,10 +84,13 @@ const zh = {
   channelIdHint: 'Channel ID (可选，自动学习)',
   telegramTokenHint: 'Bot Token (从 @BotFather 获取)',
   fillConfigFirst: '请先填写配置',
+  tabChannels: '通道配置',
+  tabNotify: '通知策略',
   notifySettingsTitle: '通知策略',
   heartbeatInterval: '心跳间隔',
   idleInterval: '静默提醒',
   minutes: '分钟',
+  notifyHint: '心跳：定时汇报终端最近输出摘要。静默：终端无输出超过此时长后发送提醒。',
 
   // ErrorBoundary
   componentError: '组件出错',
@@ -166,10 +169,13 @@ const en: typeof zh = {
   channelIdHint: 'Channel ID (optional, auto-learned)',
   telegramTokenHint: 'Bot Token (from @BotFather)',
   fillConfigFirst: 'Fill in config first',
+  tabChannels: 'Channels',
+  tabNotify: 'Notifications',
   notifySettingsTitle: 'Notification Strategy',
   heartbeatInterval: 'Heartbeat interval',
   idleInterval: 'Idle alert',
   minutes: 'min',
+  notifyHint: 'Heartbeat: periodic summary of recent terminal output. Idle: alert after prolonged silence.',
 
   // ErrorBoundary
   componentError: 'Component Error',

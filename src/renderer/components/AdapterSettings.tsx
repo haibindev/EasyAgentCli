@@ -85,6 +85,8 @@ interface AdapterDef {
   extra?: React.ReactNode
 }
 
+type SettingsTab = 'channels' | 'notify'
+
 export default function AdapterSettings({ onClose }: Props) {
   const { t } = useI18n()
   const [configs, setConfigs] = useState<Record<string, AdapterConfig>>({})
@@ -92,6 +94,7 @@ export default function AdapterSettings({ onClose }: Props) {
   const [saving, setSaving] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [notify, setNotify] = useState<NotifySettings>(DEFAULT_NOTIFY)
+  const [tab, setTab] = useState<SettingsTab>('channels')
 
   useEffect(() => {
     window.api.getAdapterConfigs().then(c => {
@@ -206,103 +209,122 @@ export default function AdapterSettings({ onClose }: Props) {
   return (
     <div className="dialog-overlay" onClick={onClose}>
       <div className="dialog adapter-dialog" onClick={e => e.stopPropagation()}>
-        <h3>{t.adapterDialogTitle}</h3>
-
-        {adapters.map(({ key, label, icon, fields, extra }) => {
-          const cfg = configs[key] || { enabled: false }
-          const isEnabled = !!cfg.enabled
-          const isExpanded = !!expanded[key]
-          const isConnected = !!status[key]
-          const isSaving = saving === key
-          const configured = hasCredentials(key, cfg as AdapterConfig)
-
-          return (
-            <div key={key} className={`adapter-section ${isEnabled ? 'enabled' : ''}`}>
-              <div className="adapter-header" onClick={() => toggleExpand(key)}>
-                <div className="adapter-title">
-                  {icon}
-                  <span className="adapter-name">{label}</span>
-                  {configured && !isExpanded && (
-                    <span className="adapter-configured-hint">{t.configured}</span>
-                  )}
-                </div>
-                <div className="adapter-header-right">
-                  <span className={`adapter-status ${isConnected ? 'connected' : ''}`}>
-                    {isConnected ? t.connected : isEnabled && isSaving ? t.connecting : isEnabled ? t.notConnected : ''}
-                  </span>
-                  <ToggleSwitch
-                    checked={isEnabled}
-                    disabled={isSaving}
-                    titleOn={t.clickToDisable}
-                    titleOff={configured ? t.clickToEnable : t.fillConfigFirst}
-                    onChange={(v) => {
-                      if (v && !configured) return  // show hint but don't toggle
-                      handleToggleEnabled(key, v)
-                    }}
-                  />
-                  <span className={`adapter-expand-arrow ${isExpanded ? 'open' : ''}`}>▸</span>
-                </div>
-              </div>
-
-              {isExpanded && (
-                <div className="adapter-fields">
-                  {fields.map(f => (
-                    <input
-                      key={f.name}
-                      type={f.type || 'text'}
-                      placeholder={f.placeholder}
-                      value={((cfg as Record<string, unknown>)[f.name] as string) || ''}
-                      onChange={e => update(key, f.name, e.target.value)}
-                    />
-                  ))}
-                  {extra}
-                  <button
-                    className="btn-create"
-                    onClick={() => handleSave(key)}
-                    disabled={isSaving}
-                  >
-                    {isSaving ? t.saving : t.saveConfig}
-                  </button>
-                </div>
-              )}
-            </div>
-          )
-        })}
-
-        <div className="notify-settings">
-          <h4>{t.notifySettingsTitle}</h4>
-          <div className="notify-row">
-            <label>{t.heartbeatInterval}</label>
-            <input
-              type="number"
-              min={1}
-              max={120}
-              value={notify.heartbeatMin}
-              onChange={e => setNotify(prev => ({ ...prev, heartbeatMin: Math.max(1, parseInt(e.target.value) || 10) }))}
-            />
-            <span>{t.minutes}</span>
-          </div>
-          <div className="notify-row">
-            <label>{t.idleInterval}</label>
-            <input
-              type="number"
-              min={1}
-              max={120}
-              value={notify.idleMin}
-              onChange={e => setNotify(prev => ({ ...prev, idleMin: Math.max(1, parseInt(e.target.value) || 15) }))}
-            />
-            <span>{t.minutes}</span>
-          </div>
+        <div className="settings-tabs">
           <button
-            className="btn-create"
-            style={{ alignSelf: 'flex-end', marginTop: 4 }}
-            onClick={async () => {
-              await window.api.saveAdapterConfig('_notify', notify as unknown as Record<string, unknown>)
-            }}
+            className={`settings-tab ${tab === 'channels' ? 'active' : ''}`}
+            onClick={() => setTab('channels')}
           >
-            {t.saveConfig}
+            {t.tabChannels}
+          </button>
+          <button
+            className={`settings-tab ${tab === 'notify' ? 'active' : ''}`}
+            onClick={() => setTab('notify')}
+          >
+            {t.tabNotify}
           </button>
         </div>
+
+        {tab === 'channels' && (
+          <>
+            {adapters.map(({ key, label, icon, fields, extra }) => {
+              const cfg = configs[key] || { enabled: false }
+              const isEnabled = !!cfg.enabled
+              const isExpanded = !!expanded[key]
+              const isConnected = !!status[key]
+              const isSaving = saving === key
+              const configured = hasCredentials(key, cfg as AdapterConfig)
+
+              return (
+                <div key={key} className={`adapter-section ${isEnabled ? 'enabled' : ''}`}>
+                  <div className="adapter-header" onClick={() => toggleExpand(key)}>
+                    <div className="adapter-title">
+                      {icon}
+                      <span className="adapter-name">{label}</span>
+                      {configured && !isExpanded && (
+                        <span className="adapter-configured-hint">{t.configured}</span>
+                      )}
+                    </div>
+                    <div className="adapter-header-right">
+                      <span className={`adapter-status ${isConnected ? 'connected' : ''}`}>
+                        {isConnected ? t.connected : isEnabled && isSaving ? t.connecting : isEnabled ? t.notConnected : ''}
+                      </span>
+                      <ToggleSwitch
+                        checked={isEnabled}
+                        disabled={isSaving}
+                        titleOn={t.clickToDisable}
+                        titleOff={configured ? t.clickToEnable : t.fillConfigFirst}
+                        onChange={(v) => {
+                          if (v && !configured) return
+                          handleToggleEnabled(key, v)
+                        }}
+                      />
+                      <span className={`adapter-expand-arrow ${isExpanded ? 'open' : ''}`}>▸</span>
+                    </div>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="adapter-fields">
+                      {fields.map(f => (
+                        <input
+                          key={f.name}
+                          type={f.type || 'text'}
+                          placeholder={f.placeholder}
+                          value={((cfg as Record<string, unknown>)[f.name] as string) || ''}
+                          onChange={e => update(key, f.name, e.target.value)}
+                        />
+                      ))}
+                      {extra}
+                      <button
+                        className="btn-create"
+                        onClick={() => handleSave(key)}
+                        disabled={isSaving}
+                      >
+                        {isSaving ? t.saving : t.saveConfig}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </>
+        )}
+
+        {tab === 'notify' && (
+          <div className="notify-settings">
+            <div className="notify-row">
+              <label>{t.heartbeatInterval}</label>
+              <input
+                type="number"
+                min={1}
+                max={120}
+                value={notify.heartbeatMin}
+                onChange={e => setNotify(prev => ({ ...prev, heartbeatMin: Math.max(1, parseInt(e.target.value) || 10) }))}
+              />
+              <span>{t.minutes}</span>
+            </div>
+            <div className="notify-row">
+              <label>{t.idleInterval}</label>
+              <input
+                type="number"
+                min={1}
+                max={120}
+                value={notify.idleMin}
+                onChange={e => setNotify(prev => ({ ...prev, idleMin: Math.max(1, parseInt(e.target.value) || 15) }))}
+              />
+              <span>{t.minutes}</span>
+            </div>
+            <p className="notify-hint">{t.notifyHint}</p>
+            <button
+              className="btn-create"
+              style={{ alignSelf: 'flex-end', marginTop: 4 }}
+              onClick={async () => {
+                await window.api.saveAdapterConfig('_notify', notify as unknown as Record<string, unknown>)
+              }}
+            >
+              {t.saveConfig}
+            </button>
+          </div>
+        )}
 
         <div className="dialog-actions">
           <button className="btn-cancel" onClick={onClose}>{t.close}</button>

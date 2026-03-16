@@ -113,6 +113,40 @@ export default function TerminalPane({ pane, active, onActivate, onClose, onRest
       } catch { /* ignore */ }
     })
 
+    // Copy support: Ctrl+C copies selection (otherwise sends ^C), Ctrl+Shift+C always copies
+    term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+      if (e.type !== 'keydown') return true
+      // Ctrl+Shift+C → always copy
+      if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+        const sel = term.getSelection()
+        if (sel) navigator.clipboard.writeText(sel)
+        return false
+      }
+      // Ctrl+C with selection → copy instead of sending SIGINT
+      if (e.ctrlKey && !e.shiftKey && e.key === 'c' && term.hasSelection()) {
+        navigator.clipboard.writeText(term.getSelection())
+        term.clearSelection()
+        return false
+      }
+      // Ctrl+Shift+V → paste
+      if (e.ctrlKey && e.shiftKey && e.key === 'V') {
+        navigator.clipboard.readText().then(text => {
+          if (text) window.api.writePane(pane.id, text)
+        })
+        return false
+      }
+      return true
+    })
+
+    // Right-click: paste from clipboard (common terminal convention)
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault()
+      navigator.clipboard.readText().then(text => {
+        if (text) window.api.writePane(pane.id, text)
+      })
+    }
+    containerRef.current.addEventListener('contextmenu', handleContextMenu)
+
     // Input: terminal keystrokes → main process PTY
     const inputDisposable = term.onData((data) => {
       window.api.writePane(pane.id, data)
@@ -144,21 +178,28 @@ export default function TerminalPane({ pane, active, onActivate, onClose, onRest
       }
     })
 
-    // Resize observer: auto-fit when container size changes
+    // Resize observer: auto-fit when container size changes (debounced)
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null
     const resizeObserver = new ResizeObserver(() => {
-      try {
-        fitAddon.fit()
-        window.api.resizePane(pane.id, term.cols, term.rows)
-      } catch { /* ignore */ }
+      if (resizeTimer) clearTimeout(resizeTimer)
+      resizeTimer = setTimeout(() => {
+        try {
+          fitAddon.fit()
+          window.api.resizePane(pane.id, term.cols, term.rows)
+        } catch { /* ignore */ }
+      }, 50)
     })
     resizeObserver.observe(containerRef.current)
 
+    const container = containerRef.current
     return () => {
       inputDisposable.dispose()
       unsubOutput()
       unsubExit()
       unsubClear()
+      if (resizeTimer) clearTimeout(resizeTimer)
       resizeObserver.disconnect()
+      container?.removeEventListener('contextmenu', handleContextMenu)
       term.dispose()
       termRef.current = null
       fitRef.current = null
