@@ -63,6 +63,8 @@ const zh = {
   browse: '浏览...',
   cancel: '取消',
   create: '创建',
+  bypassPermissions: '跳过权限确认',
+  bypassHint: '启用后 Agent 将自动执行所有操作，无需确认',
 
   // AdapterSettings
   adapterDialogTitle: '远程适配器配置',
@@ -138,6 +140,8 @@ const en: typeof zh = {
   browse: 'Browse...',
   cancel: 'Cancel',
   create: 'Create',
+  bypassPermissions: 'Bypass Permissions',
+  bypassHint: 'Agent will execute all operations automatically without confirmation',
 
   // AdapterSettings
   adapterDialogTitle: 'Remote Adapter Settings',

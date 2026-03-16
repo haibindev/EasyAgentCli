@@ -211,16 +211,20 @@ export default function TerminalPane({ pane, active, onActivate, onClose, onRest
                 'var(--text-dim)'
             }}
           />
-          <select
-            className="yolo-select"
-            value={pane.yoloLevel}
-            onChange={e => onYoloChange(e.target.value as YoloLevel)}
-            onClick={e => e.stopPropagation()}
-          >
-            <option value="off">{t.yoloManual}</option>
-            <option value="safe">Safe</option>
-            <option value="full">Full-Auto</option>
-          </select>
+          {pane.bypassPermissions ? (
+            <span className="bypass-badge" title={t.bypassPermissions}>🔓</span>
+          ) : (
+            <select
+              className="yolo-select"
+              value={pane.yoloLevel}
+              onChange={e => onYoloChange(e.target.value as YoloLevel)}
+              onClick={e => e.stopPropagation()}
+            >
+              <option value="off">{t.yoloManual}</option>
+              <option value="safe">Safe</option>
+              <option value="full">Full-Auto</option>
+            </select>
+          )}
           <button
             className="restart-btn"
             onClick={e => { e.stopPropagation(); onRestart() }}

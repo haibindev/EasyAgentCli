@@ -9,6 +9,7 @@ export interface PaneInfo {
   cwd: string
   status: PaneStatus
   yoloLevel: YoloLevel
+  bypassPermissions: boolean
   lastEvent?: { type: string; content: string; time: number }
 }
 

@@ -127,11 +127,12 @@ function saveSession(): void {
 function restoreSession(): void {
   try {
     const raw = readFileSync(getSessionPath(), 'utf-8')
-    const configs = JSON.parse(raw) as Array<{ type: string; cwd: string; yoloLevel: string; sessionId?: string }>
+    const configs = JSON.parse(raw) as Array<{ type: string; cwd: string; yoloLevel: string; sessionId?: string; bypassPermissions?: boolean }>
     for (const cfg of configs) {
-      // For Claude panes with a saved sessionId, resume that exact conversation
-      const opts = cfg.sessionId ? { resumeSessionId: cfg.sessionId } : undefined
-      const pane = ptyManager.create(cfg.type, cfg.cwd, opts)
+      const opts: import('./pty-manager').CreatePaneOpts = {}
+      if (cfg.sessionId) opts.resumeSessionId = cfg.sessionId
+      if (cfg.bypassPermissions) opts.bypassPermissions = true
+      const pane = ptyManager.create(cfg.type, cfg.cwd, Object.keys(opts).length > 0 ? opts : undefined)
       if (cfg.yoloLevel !== 'off') {
         ptyManager.setYolo(pane.id, cfg.yoloLevel as 'safe' | 'full')
       }
@@ -191,6 +192,7 @@ function createWindow(): void {
 
   ptyManager.on('pane:exit', (msg: { id: string; exitCode: number }) => {
     safeSend('pane:exit', msg)
+    messageRouter.dispatchExit(msg.id, msg.exitCode)
   })
 
   ptyManager.on('pane:clear', (msg: { id: string }) => {
@@ -216,8 +218,9 @@ function createWindow(): void {
 }
 
 function setupIPC(): void {
-  ipcMain.handle('pane:create', async (_, args: { type: string; cwd: string }) => {
-    return ptyManager.create(args.type, args.cwd)
+  ipcMain.handle('pane:create', async (_, args: { type: string; cwd: string; bypassPermissions?: boolean }) => {
+    const opts = args.bypassPermissions ? { bypassPermissions: true } : undefined
+    return ptyManager.create(args.type, args.cwd, opts)
   })
 
   ipcMain.handle('pane:close', async (_, id: string) => {

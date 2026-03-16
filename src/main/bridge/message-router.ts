@@ -4,41 +4,32 @@ import type { PtyManager, PaneInfo } from '../pty-manager'
 export interface ParsedCommand {
   type: 'panes' | 'use' | 'screen' | 'log' | 'yolo' | 'yes' | 'no' | 'input' | 'help' | 'unknown'
   args: string[]
+  targetPane?: string  // pane ID for indexed replies like "1y"
 }
 
 /** Adapter interface for IM platforms */
 export interface MessageAdapter {
   readonly name: string
-  /** Send text message back to user */
   sendText(text: string): Promise<void>
-  /** Start the adapter (connect/login) */
   start(): Promise<void>
-  /** Stop the adapter */
   stop(): Promise<void>
-  /** Whether the adapter is connected */
   isConnected(): boolean
 }
 
-/** Callback for when an adapter receives a user message */
 export type OnMessageCallback = (adapterName: string, text: string) => void
 
-/**
- * MessageRouter: command parsing + event routing for all IM adapters.
- * Sits between PtyManager and IM adapters (Feishu, Discord, Openclaw).
- */
 export class MessageRouter {
   private adapters = new Map<string, MessageAdapter>()
   private activePane: string | null = null
+  private lastConfirmPane: string | null = null  // most recent pane that requested confirmation
   private leaveMode = false
 
   constructor(private ptyManager: PtyManager) {}
 
-  /** Register an adapter */
   addAdapter(adapter: MessageAdapter): void {
     this.adapters.set(adapter.name, adapter)
   }
 
-  /** Remove an adapter */
   removeAdapter(name: string): void {
     this.adapters.delete(name)
   }
@@ -47,11 +38,12 @@ export class MessageRouter {
     this.leaveMode = enabled
   }
 
-  /** Called when a terminal event occurs (confirm/done/error/idle) */
+  /** Called when a terminal event occurs (confirm/done/error/idle/heartbeat) */
   async dispatchEvent(paneId: string, event: { type: string; content: string; time: number }): Promise<void> {
     if (!this.leaveMode) return
 
     const pane = this.ptyManager.list().find(p => p.id === paneId)
+    const idx = this.ptyManager.paneIndex(paneId)
     const title = pane?.title ?? paneId
 
     let emoji = ''
@@ -60,16 +52,35 @@ export class MessageRouter {
       case 'done': emoji = '✅'; break
       case 'error': emoji = '❌'; break
       case 'idle': emoji = '💤'; break
+      case 'heartbeat': emoji = '📊'; break
+      case 'exit': emoji = '🛑'; break
     }
 
-    const msg = `${emoji} [${title}] ${event.content}`
+    // Track which pane last requested confirmation
+    if (event.type === 'confirm') {
+      this.lastConfirmPane = paneId
+    }
+
+    let msg = `${emoji} [#${idx} ${title}] ${event.content}`
+
+    // For confirm events, add quick-reply hint
+    if (event.type === 'confirm') {
+      msg += `\n💡 回复 "${idx}y" 同意 / "${idx}n" 拒绝`
+    }
+
     await this.broadcast(msg)
   }
 
-  /** Called when pane list changes */
-  async dispatchPaneList(panes: PaneInfo[]): Promise<void> {
-    // Don't broadcast pane list changes automatically — too noisy
-    // Users can request with /panes
+  /** Called when a PTY process exits */
+  async dispatchExit(paneId: string, exitCode: number): Promise<void> {
+    if (!this.leaveMode) return
+
+    const pane = this.ptyManager.list().find(p => p.id === paneId)
+    const idx = this.ptyManager.paneIndex(paneId)
+    const title = pane?.title ?? paneId
+
+    const msg = `🛑 [#${idx} ${title}] 进程退出 (code: ${exitCode})`
+    await this.broadcast(msg)
   }
 
   /** Handle incoming user message from any adapter */
@@ -82,8 +93,24 @@ export class MessageRouter {
     }
   }
 
-  /** Parse user text into a command */
+  /** Parse user text into a command, supporting indexed replies like "1y", "2n" */
   parseCommand(text: string): ParsedCommand {
+    // Indexed quick replies: "1y", "2n", "3y", "#1 y", "#2 n"
+    const indexedMatch = text.match(/^#?(\d+)\s*([yn])$/i)
+    if (indexedMatch) {
+      const paneIdx = parseInt(indexedMatch[1], 10)
+      const answer = indexedMatch[2].toLowerCase()
+      const panes = this.ptyManager.list()
+      if (paneIdx >= 1 && paneIdx <= panes.length) {
+        const targetId = panes[paneIdx - 1].id
+        return {
+          type: answer === 'y' ? 'yes' : 'no',
+          args: [],
+          targetPane: targetId
+        }
+      }
+    }
+
     // Slash commands
     if (text.startsWith('/')) {
       const parts = text.slice(1).split(/\s+/)
@@ -100,20 +127,19 @@ export class MessageRouter {
       }
     }
 
-    // Quick shortcuts
+    // Quick shortcuts (bare y/n → targets last confirming pane)
     const lower = text.toLowerCase()
     if (lower === 'y' || lower === '同意' || lower === 'yes' || lower === '确认') {
-      return { type: 'yes', args: [] }
+      return { type: 'yes', args: [], targetPane: this.lastConfirmPane ?? undefined }
     }
     if (lower === 'n' || lower === '拒绝' || lower === 'no' || lower === '取消') {
-      return { type: 'no', args: [] }
+      return { type: 'no', args: [], targetPane: this.lastConfirmPane ?? undefined }
     }
 
     // Plain text → input to active pane
     return { type: 'input', args: [text] }
   }
 
-  /** Execute a parsed command and return response text */
   private async executeCommand(cmd: ParsedCommand): Promise<string> {
     switch (cmd.type) {
       case 'panes':
@@ -127,9 +153,9 @@ export class MessageRouter {
       case 'yolo':
         return this.cmdYolo(cmd.args[0])
       case 'yes':
-        return this.cmdInput('y')
+        return this.cmdInput('y', cmd.targetPane)
       case 'no':
-        return this.cmdInput('n')
+        return this.cmdInput('n', cmd.targetPane)
       case 'input':
         return this.cmdInput(cmd.args[0])
       case 'help':
@@ -143,38 +169,40 @@ export class MessageRouter {
     const panes = this.ptyManager.list()
     if (panes.length === 0) return '当前没有终端'
 
-    const lines = panes.map(p => {
+    const lines = panes.map((p, i) => {
+      const idx = i + 1
       const active = p.id === this.activePane ? ' 👈' : ''
       const status = p.status === 'running' ? '▶' :
                      p.status === 'confirm' ? '⚠' :
                      p.status === 'error' ? '✗' :
                      p.status === 'done' ? '✓' : '○'
-      return `${status} ${p.title} (${p.type}) [${p.id}]${active}`
+      const bypass = p.bypassPermissions ? ' 🔓' : ''
+      return `${status} #${idx} ${p.title} (${p.type})${bypass}${active}`
     })
 
     return `📋 终端列表:\n${lines.join('\n')}`
   }
 
   private cmdUse(idOrIndex?: string): string {
-    if (!idOrIndex) return '用法: /use <id 或序号>'
+    if (!idOrIndex) return '用法: /use <序号>'
 
     const panes = this.ptyManager.list()
     let target: PaneInfo | undefined
 
-    // Try by ID
-    target = panes.find(p => p.id === idOrIndex)
     // Try by index (1-based)
+    const idx = parseInt(idOrIndex, 10)
+    if (!isNaN(idx) && idx >= 1 && idx <= panes.length) {
+      target = panes[idx - 1]
+    }
+    // Try by ID
     if (!target) {
-      const idx = parseInt(idOrIndex, 10)
-      if (!isNaN(idx) && idx >= 1 && idx <= panes.length) {
-        target = panes[idx - 1]
-      }
+      target = panes.find(p => p.id === idOrIndex)
     }
 
     if (!target) return `找不到终端: ${idOrIndex}`
 
     this.activePane = target.id
-    return `已切换到: ${target.title} [${target.id}]`
+    return `已切换到: #${panes.indexOf(target) + 1} ${target.title}`
   }
 
   private cmdScreen(): string {
@@ -184,7 +212,6 @@ export class MessageRouter {
     const lines = this.ptyManager.snapshot(id)
     if (lines.length === 0) return '(终端为空)'
 
-    // Take last 60 lines
     const display = lines.slice(-60).join('\n')
     return `📺 屏幕快照:\n\`\`\`\n${display}\n\`\`\``
   }
@@ -203,8 +230,12 @@ export class MessageRouter {
     const id = this.getActivePaneId()
     if (!id) return '请先用 /use 选择一个终端'
 
+    const pane = this.ptyManager.list().find(p => p.id === id)
+    if (pane?.bypassPermissions) {
+      return '🔓 当前终端已启用 bypass 模式，无需设置 YOLO'
+    }
+
     if (!level) {
-      const pane = this.ptyManager.list().find(p => p.id === id)
       return `当前自动化级别: ${pane?.yoloLevel ?? 'unknown'}`
     }
 
@@ -217,37 +248,41 @@ export class MessageRouter {
     return `已设置 ${level} 模式`
   }
 
-  private cmdInput(text: string): string {
-    const id = this.getActivePaneId()
+  private cmdInput(text: string, targetPaneId?: string): string {
+    const id = targetPaneId ?? this.getActivePaneId()
     if (!id) return '请先用 /use 选择一个终端'
 
+    const pane = this.ptyManager.list().find(p => p.id === id)
+    const idx = this.ptyManager.paneIndex(id)
+
     this.ptyManager.write(id, text + '\r')
-    return `✏️ 已发送`
+    return `✏️ 已发送到 #${idx} ${pane?.title ?? id}`
   }
 
   private cmdHelp(): string {
     return [
       '📖 可用命令:',
       '/panes — 列出所有终端',
-      '/use <id|序号> — 切换当前终端',
+      '/use <序号> — 切换当前终端',
       '/screen — 查看屏幕快照 (60行)',
       '/log [n] — 查看最近 n 行 (默认20)',
       '/yolo [off|safe|full] — 查看/设置自动化级别',
-      'y/同意 — 确认当前操作',
-      'n/拒绝 — 拒绝当前操作',
+      '',
+      '快捷回复:',
+      'y / 同意 — 确认（发送到最近请求确认的终端）',
+      'n / 拒绝 — 拒绝',
+      '1y / 2n — 对指定编号终端确认/拒绝',
       '其他文字 — 直接输入到当前终端',
     ].join('\n')
   }
 
   private getActivePaneId(): string | null {
     if (this.activePane) {
-      // Verify it still exists
       const panes = this.ptyManager.list()
       if (panes.find(p => p.id === this.activePane)) {
         return this.activePane
       }
     }
-    // Auto-select first pane
     const panes = this.ptyManager.list()
     if (panes.length > 0) {
       this.activePane = panes[0].id
@@ -256,7 +291,6 @@ export class MessageRouter {
     return null
   }
 
-  /** Broadcast message to all connected adapters */
   private async broadcast(text: string): Promise<void> {
     for (const adapter of this.adapters.values()) {
       if (adapter.isConnected()) {
@@ -269,7 +303,6 @@ export class MessageRouter {
     }
   }
 
-  /** Get status of all adapters */
   getStatus(): Record<string, boolean> {
     const result: Record<string, boolean> = {}
     for (const [name, adapter] of this.adapters) {

@@ -61,12 +61,13 @@ export default function App() {
     setDialog({ visible: true, type })
   }, [])
 
-  const handleCreatePane = useCallback(async (cwd: string, shellVariant?: string) => {
+  const handleCreatePane = useCallback(async (cwd: string, shellVariant?: string, bypassPermissions?: boolean) => {
     const type = dialog.type
     setDialog({ visible: false, type: 'shell' })
     const pane = await window.api.createPane(
       shellVariant && type === 'shell' ? `shell:${shellVariant}` : type,
-      cwd
+      cwd,
+      bypassPermissions
     )
     setActivePane(pane.id)
   }, [dialog.type])

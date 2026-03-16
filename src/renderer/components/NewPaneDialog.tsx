@@ -17,6 +17,7 @@ const SHELL_OPTIONS = [
 
 const LAST_CWD_KEY = 'eac:lastCwd'
 const LAST_SHELL_KEY = 'eac:lastShell'
+const LAST_BYPASS_KEY = 'eac:lastBypass'
 
 function getLastCwd(): string {
   return localStorage.getItem(LAST_CWD_KEY) || 'D:\\'
@@ -34,9 +35,17 @@ function saveLastShell(shell: string): void {
   localStorage.setItem(LAST_SHELL_KEY, shell)
 }
 
+function getLastBypass(): boolean {
+  return localStorage.getItem(LAST_BYPASS_KEY) === 'true'
+}
+
+function saveLastBypass(v: boolean): void {
+  localStorage.setItem(LAST_BYPASS_KEY, String(v))
+}
+
 interface Props {
   type: PaneType
-  onConfirm: (cwd: string, shellVariant?: string) => void
+  onConfirm: (cwd: string, shellVariant?: string, bypassPermissions?: boolean) => void
   onClose: () => void
 }
 
@@ -44,6 +53,9 @@ export default function NewPaneDialog({ type, onConfirm, onClose }: Props) {
   const { t } = useI18n()
   const [cwd, setCwd] = useState(getLastCwd)
   const [shellVariant, setShellVariant] = useState(getLastShell)
+  const [bypass, setBypass] = useState(getLastBypass)
+
+  const isAgent = type === 'claude' || type === 'codex'
 
   const handleBrowse = async () => {
     const dir = await window.api.selectDirectory()
@@ -54,11 +66,12 @@ export default function NewPaneDialog({ type, onConfirm, onClose }: Props) {
     e.preventDefault()
     if (!cwd.trim()) return
     saveLastCwd(cwd.trim())
+    if (isAgent) saveLastBypass(bypass)
     if (type === 'shell') {
       saveLastShell(shellVariant)
       onConfirm(cwd.trim(), shellVariant)
     } else {
-      onConfirm(cwd.trim())
+      onConfirm(cwd.trim(), undefined, isAgent ? bypass : undefined)
     }
   }
 
@@ -97,6 +110,20 @@ export default function NewPaneDialog({ type, onConfirm, onClose }: Props) {
             </button>
           </div>
         </div>
+
+        {isAgent && (
+          <div className="dialog-field">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={bypass}
+                onChange={e => setBypass(e.target.checked)}
+              />
+              <span>{t.bypassPermissions}</span>
+            </label>
+            <span className="field-hint">{t.bypassHint}</span>
+          </div>
+        )}
 
         <div className="dialog-actions">
           <button type="button" className="btn-cancel" onClick={onClose}>{t.cancel}</button>

@@ -2,8 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 contextBridge.exposeInMainWorld('api', {
   // Pane management
-  createPane: (type: string, cwd: string) =>
-    ipcRenderer.invoke('pane:create', { type, cwd }),
+  createPane: (type: string, cwd: string, bypassPermissions?: boolean) =>
+    ipcRenderer.invoke('pane:create', { type, cwd, bypassPermissions }),
 
   closePane: (id: string) =>
     ipcRenderer.invoke('pane:close', id),
