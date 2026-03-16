@@ -39,8 +39,8 @@ interface PaneInternal extends PaneInfo {
 
 const RISK_HIGH = /rm\s+-|drop\s+|git\s+push|sudo|format|truncate|delete/i
 const RISK_MED = /bash|shell|execute|run\s+command/i
-const QUIET_THRESHOLD = 15 * 60 * 1000   // 15 min — idle notification
-const HEARTBEAT_INTERVAL = 10 * 60 * 1000 // 10 min — progress heartbeat
+let QUIET_THRESHOLD = 15 * 60 * 1000   // 15 min — idle notification (configurable)
+let HEARTBEAT_INTERVAL = 10 * 60 * 1000 // 10 min — progress heartbeat (configurable)
 
 // Remove env vars that prevent Claude Code from launching inside our PTY
 function cleanEnv(): Record<string, string> {
@@ -215,6 +215,20 @@ export class PtyManager extends EventEmitter {
 
   list(): PaneInfo[] {
     return Array.from(this.panes.values()).map(p => this.toInfo(p))
+  }
+
+  /** Update notification intervals (in minutes) and restart timers */
+  setNotifyIntervals(heartbeatMin: number, idleMin: number): void {
+    HEARTBEAT_INTERVAL = heartbeatMin * 60 * 1000
+    QUIET_THRESHOLD = idleMin * 60 * 1000
+    // Restart timers on all running panes
+    for (const pane of this.panes.values()) {
+      if (pane.status === 'running') {
+        if (pane.heartbeatTimer) clearInterval(pane.heartbeatTimer)
+        this.startHeartbeat(pane)
+        this.resetQuietTimer(pane)
+      }
+    }
   }
 
   /** Get pane index (1-based) for IM display */
@@ -424,7 +438,8 @@ export class PtyManager extends EventEmitter {
   private resetQuietTimer(pane: PaneInternal): void {
     if (pane.quietTimer) clearTimeout(pane.quietTimer)
     pane.quietTimer = setTimeout(() => {
-      pane.lastEvent = { type: 'idle', content: '已静默 15 分钟', time: Date.now() }
+      const mins = Math.round(QUIET_THRESHOLD / 60000)
+      pane.lastEvent = { type: 'idle', content: `已静默 ${mins} 分钟`, time: Date.now() }
       this.emit('pane:event', { id: pane.id, event: pane.lastEvent })
     }, QUIET_THRESHOLD)
   }

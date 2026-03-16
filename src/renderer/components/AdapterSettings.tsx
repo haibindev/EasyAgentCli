@@ -6,6 +6,14 @@ interface AdapterConfig {
   [key: string]: unknown
 }
 
+/** Global notification settings stored alongside adapter configs */
+interface NotifySettings {
+  heartbeatMin: number  // minutes
+  idleMin: number       // minutes
+}
+
+const DEFAULT_NOTIFY: NotifySettings = { heartbeatMin: 10, idleMin: 15 }
+
 interface Props {
   onClose: () => void
 }
@@ -83,14 +91,20 @@ export default function AdapterSettings({ onClose }: Props) {
   const [status, setStatus] = useState<Record<string, boolean>>({})
   const [saving, setSaving] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  const [notify, setNotify] = useState<NotifySettings>(DEFAULT_NOTIFY)
 
   useEffect(() => {
     window.api.getAdapterConfigs().then(c => {
-      const loaded = c as Record<string, AdapterConfig>
+      const loaded = c as Record<string, AdapterConfig> & { _notify?: NotifySettings }
+      // Extract notify settings
+      if (loaded._notify) {
+        setNotify({ ...DEFAULT_NOTIFY, ...loaded._notify })
+      }
       setConfigs(loaded)
       // Auto-expand adapters that have been configured
       const exp: Record<string, boolean> = {}
       for (const [name, cfg] of Object.entries(loaded)) {
+        if (name === '_notify') continue
         if (cfg && hasCredentials(name, cfg)) exp[name] = true
       }
       setExpanded(exp)
@@ -112,10 +126,12 @@ export default function AdapterSettings({ onClose }: Props) {
     setSaving(name)
     const config = configs[name] || { enabled: false }
     await window.api.saveAdapterConfig(name, config)
+    // Also save notify settings
+    await window.api.saveAdapterConfig('_notify', notify as unknown as Record<string, unknown>)
     const newStatus = await window.api.getAdapterStatus()
     setStatus(newStatus)
     setSaving(null)
-  }, [configs])
+  }, [configs, notify])
 
   const handleToggleEnabled = useCallback(async (name: string, enabled: boolean) => {
     const config = { ...(configs[name] || {}), enabled }
@@ -216,10 +232,11 @@ export default function AdapterSettings({ onClose }: Props) {
                   </span>
                   <ToggleSwitch
                     checked={isEnabled}
-                    disabled={isSaving || (!configured && !isEnabled)}
+                    disabled={isSaving}
                     titleOn={t.clickToDisable}
-                    titleOff={t.clickToEnable}
+                    titleOff={configured ? t.clickToEnable : t.fillConfigFirst}
                     onChange={(v) => {
+                      if (v && !configured) return  // show hint but don't toggle
                       handleToggleEnabled(key, v)
                     }}
                   />
@@ -228,7 +245,7 @@ export default function AdapterSettings({ onClose }: Props) {
               </div>
 
               {isExpanded && (
-                <div className={`adapter-fields ${!isEnabled ? 'dimmed' : ''}`}>
+                <div className="adapter-fields">
                   {fields.map(f => (
                     <input
                       key={f.name}
@@ -251,6 +268,41 @@ export default function AdapterSettings({ onClose }: Props) {
             </div>
           )
         })}
+
+        <div className="notify-settings">
+          <h4>{t.notifySettingsTitle}</h4>
+          <div className="notify-row">
+            <label>{t.heartbeatInterval}</label>
+            <input
+              type="number"
+              min={1}
+              max={120}
+              value={notify.heartbeatMin}
+              onChange={e => setNotify(prev => ({ ...prev, heartbeatMin: Math.max(1, parseInt(e.target.value) || 10) }))}
+            />
+            <span>{t.minutes}</span>
+          </div>
+          <div className="notify-row">
+            <label>{t.idleInterval}</label>
+            <input
+              type="number"
+              min={1}
+              max={120}
+              value={notify.idleMin}
+              onChange={e => setNotify(prev => ({ ...prev, idleMin: Math.max(1, parseInt(e.target.value) || 15) }))}
+            />
+            <span>{t.minutes}</span>
+          </div>
+          <button
+            className="btn-create"
+            style={{ alignSelf: 'flex-end', marginTop: 4 }}
+            onClick={async () => {
+              await window.api.saveAdapterConfig('_notify', notify as unknown as Record<string, unknown>)
+            }}
+          >
+            {t.saveConfig}
+          </button>
+        </div>
 
         <div className="dialog-actions">
           <button className="btn-cancel" onClick={onClose}>{t.close}</button>

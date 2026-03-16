@@ -807,9 +807,7 @@ html, body, #root {
   transition: opacity 0.2s;
 }
 
-.adapter-fields.dimmed {
-  opacity: 0.5;
-}
+/* (dimmed class removed — fields always editable) */
 
 .adapter-fields input {
   padding: 6px 10px;
@@ -830,6 +828,57 @@ html, body, #root {
   align-self: flex-end;
   padding: 4px 12px;
   font-size: 12px;
+}
+
+/* === Notify settings in adapter dialog === */
+.notify-settings {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notify-settings h4 {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.notify-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.notify-row label {
+  color: var(--text-dim);
+  min-width: 72px;
+}
+
+.notify-row input[type="number"] {
+  width: 60px;
+  padding: 4px 6px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+  text-align: center;
+}
+
+.notify-row input[type="number"]:focus {
+  outline: none;
+  border-color: var(--blue);
+}
+
+.notify-row span {
+  color: var(--text-dim);
+  font-size: 11px;
 }
 
 /* === Scrollbar (global dark theme) === */

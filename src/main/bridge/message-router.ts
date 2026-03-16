@@ -85,9 +85,18 @@ export class MessageRouter {
 
   /** Handle incoming user message from any adapter */
   async handleMessage(adapterName: string, text: string): Promise<void> {
+    const adapter = this.adapters.get(adapterName)
+
+    // Not in leave mode: don't process commands, just hint
+    if (!this.leaveMode) {
+      if (adapter) {
+        await adapter.sendText('💡 当前未开启离开模式，消息不会被处理。请在 EasyAgentCli 中开启「离开模式」后重试。')
+      }
+      return
+    }
+
     const cmd = this.parseCommand(text.trim())
     const response = await this.executeCommand(cmd)
-    const adapter = this.adapters.get(adapterName)
     if (adapter && response) {
       await adapter.sendText(response)
     }

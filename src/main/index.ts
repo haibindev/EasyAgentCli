@@ -94,8 +94,18 @@ async function startAdapter(name: string, configs: AdapterConfigs): Promise<stri
   }
 }
 
+function applyNotifySettings(configs: AdapterConfigs): void {
+  const notify = (configs as Record<string, unknown>)._notify as { heartbeatMin?: number; idleMin?: number } | undefined
+  if (notify) {
+    const hb = typeof notify.heartbeatMin === 'number' ? notify.heartbeatMin : 10
+    const idle = typeof notify.idleMin === 'number' ? notify.idleMin : 15
+    ptyManager.setNotifyIntervals(hb, idle)
+  }
+}
+
 async function initAdapters(): Promise<void> {
   const configs = loadAdapterConfigs()
+  applyNotifySettings(configs)
   if (configs.feishu?.enabled) await startAdapter('feishu', configs)
   if (configs.discord?.enabled) await startAdapter('discord', configs)
   if (configs.openclaw?.enabled) await startAdapter('openclaw', configs)
@@ -279,6 +289,12 @@ function setupIPC(): void {
     const configs = loadAdapterConfigs()
     ;(configs as Record<string, unknown>)[args.name] = args.config
     saveAdapterConfigs(configs)
+
+    // Apply notify settings if changed
+    if (args.name === '_notify') {
+      applyNotifySettings(configs)
+      return 'ok'
+    }
 
     // Restart the adapter
     const result = await startAdapter(args.name, configs)

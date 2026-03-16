@@ -72,10 +72,9 @@ export class FeishuAdapter implements MessageAdapter {
       this.wsClient = new lark.WSClient({
         appId: this.config.appId,
         appSecret: this.config.appSecret,
-        eventDispatcher: dispatcher,
         loggerLevel: lark.LoggerLevel.WARN,
       })
-      await (this.wsClient as { start: () => Promise<void> }).start()
+      await (this.wsClient as { start: (p: { eventDispatcher: unknown }) => Promise<void> }).start({ eventDispatcher: dispatcher })
       this.connected = true
       console.log('[Feishu] WebSocket connected')
     } catch (err) {

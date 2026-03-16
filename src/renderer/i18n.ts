@@ -83,6 +83,11 @@ const zh = {
   chatIdHint: 'Chat ID (可选，自动学习)',
   channelIdHint: 'Channel ID (可选，自动学习)',
   telegramTokenHint: 'Bot Token (从 @BotFather 获取)',
+  fillConfigFirst: '请先填写配置',
+  notifySettingsTitle: '通知策略',
+  heartbeatInterval: '心跳间隔',
+  idleInterval: '静默提醒',
+  minutes: '分钟',
 
   // ErrorBoundary
   componentError: '组件出错',
@@ -160,6 +165,11 @@ const en: typeof zh = {
   chatIdHint: 'Chat ID (optional, auto-learned)',
   channelIdHint: 'Channel ID (optional, auto-learned)',
   telegramTokenHint: 'Bot Token (from @BotFather)',
+  fillConfigFirst: 'Fill in config first',
+  notifySettingsTitle: 'Notification Strategy',
+  heartbeatInterval: 'Heartbeat interval',
+  idleInterval: 'Idle alert',
+  minutes: 'min',
 
   // ErrorBoundary
   componentError: 'Component Error',
