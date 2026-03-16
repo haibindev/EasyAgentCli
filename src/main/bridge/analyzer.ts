@@ -4,13 +4,20 @@ const PATTERNS = {
   error: /^Error:|^Failed:|✗\s+/m
 }
 
+const SUMMARY_RE = /✓|✗|Created|Updated|Wrote|Error|Failed|Test/
+
+/** Ring buffer interface — accepts our RingBuffer or plain array */
+interface Ringlike {
+  last(n: number): string[]
+}
+
 export interface AnalyzerEvent {
   type: 'confirm' | 'done' | 'error' | 'idle'
   content: string
 }
 
 export class Analyzer {
-  feed(ring: string[], text: string): AnalyzerEvent | null {
+  feed(ring: Ringlike, text: string): AnalyzerEvent | null {
     if (PATTERNS.confirm.test(text)) {
       return { type: 'confirm', content: text.slice(0, 300) }
     }
@@ -23,10 +30,12 @@ export class Analyzer {
     return null
   }
 
-  private buildSummary(ring: string[]): string {
-    const key = ring.slice(-200).filter(l =>
-      /✓|✗|Created|Updated|Wrote|Error|Failed|Test/.test(l)
-    )
-    return key.slice(-10).join('\n') || ring.slice(-5).join('\n')
+  private buildSummary(ring: Ringlike): string {
+    const recent = ring.last(200)
+    const key: string[] = []
+    for (let i = recent.length - 1; i >= 0 && key.length < 10; i--) {
+      if (SUMMARY_RE.test(recent[i])) key.unshift(recent[i])
+    }
+    return key.length > 0 ? key.join('\n') : ring.last(5).join('\n')
   }
 }

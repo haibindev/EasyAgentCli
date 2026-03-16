@@ -26,12 +26,43 @@ export interface CreatePaneOpts {
   bypassPermissions?: boolean
 }
 
+/** Circular buffer — O(1) push, O(1) trim, no array copies */
+class RingBuffer {
+  private buf: string[]
+  private head = 0
+  private count = 0
+  constructor(private capacity: number) {
+    this.buf = new Array(capacity)
+  }
+  push(line: string): void {
+    this.buf[(this.head + this.count) % this.capacity] = line
+    if (this.count < this.capacity) {
+      this.count++
+    } else {
+      this.head = (this.head + 1) % this.capacity
+    }
+  }
+  /** Return last n items (or all if n > count) */
+  last(n: number): string[] {
+    const take = Math.min(n, this.count)
+    const start = (this.head + this.count - take) % this.capacity
+    const result: string[] = []
+    for (let i = 0; i < take; i++) {
+      result.push(this.buf[(start + i) % this.capacity])
+    }
+    return result
+  }
+  get length(): number { return this.count }
+  clear(): void { this.head = 0; this.count = 0 }
+}
+
 interface PaneInternal extends PaneInfo {
   pty: pty.IPty
   ptyGeneration: number
   shellVariant: string
-  ring: string[]
+  ring: RingBuffer
   quietTimer: ReturnType<typeof setTimeout> | null
+  quietTimerDirty: boolean  // debounce quiet timer resets
   heartbeatTimer: ReturnType<typeof setInterval> | null
   lastOutputTime: number  // track active vs quiet
   sessionId: string | null
@@ -117,8 +148,9 @@ export class PtyManager extends EventEmitter {
       pty: p,
       ptyGeneration: 0,
       shellVariant,
-      ring: [],
+      ring: new RingBuffer(2000),
       quietTimer: null,
+      quietTimerDirty: false,
       heartbeatTimer: null,
       lastOutputTime: Date.now(),
       sessionId
@@ -165,7 +197,7 @@ export class PtyManager extends EventEmitter {
     }
 
     pane.pty = p
-    pane.ring = []
+    pane.ring.clear()
     pane.status = 'running'
     pane.lastEvent = undefined
     pane.lastOutputTime = Date.now()
@@ -212,7 +244,7 @@ export class PtyManager extends EventEmitter {
   }
 
   snapshot(id: string): string[] {
-    return this.panes.get(id)?.ring.slice(-60) ?? []
+    return this.panes.get(id)?.ring.last(60) ?? []
   }
 
   list(): PaneInfo[] {
@@ -247,14 +279,31 @@ export class PtyManager extends EventEmitter {
 
       this.emit('pane:output', { id, data })
 
+      // Strip ANSI and push lines into circular buffer — O(1) per line, no splice/shift
       const stripped = stripAnsi(data)
-      const lines = stripped.split('\n')
-      pane.ring.push(...lines)
-      if (pane.ring.length > 2000) pane.ring.splice(0, pane.ring.length - 2000)
+      let start = 0
+      for (let i = 0; i < stripped.length; i++) {
+        if (stripped.charCodeAt(i) === 10) { // '\n'
+          pane.ring.push(stripped.substring(start, i))
+          start = i + 1
+        }
+      }
+      if (start < stripped.length) {
+        pane.ring.push(stripped.substring(start))
+      }
 
       pane.lastOutputTime = Date.now()
-      this.resetQuietTimer(pane)
 
+      // Debounced quiet timer reset — only reschedule at most once per second
+      if (!pane.quietTimerDirty) {
+        pane.quietTimerDirty = true
+        setTimeout(() => {
+          pane.quietTimerDirty = false
+          this.resetQuietTimer(pane)
+        }, 1000)
+      }
+
+      // Analyzer only runs regex on the current chunk, not the whole ring
       const event = this.analyzer.feed(pane.ring, stripped)
       if (event) this.handleEvent(pane, event, stripped)
     })
@@ -277,7 +326,7 @@ export class PtyManager extends EventEmitter {
       // Only send heartbeat if pane has had output recently (active, not idle)
       const sinceLastOutput = Date.now() - pane.lastOutputTime
       if (sinceLastOutput < HEARTBEAT_INTERVAL && pane.status === 'running') {
-        const summary = pane.ring.slice(-5).join('\n').trim()
+        const summary = pane.ring.last(5).join('\n').trim()
         if (summary) {
           this.emit('pane:event', {
             id: pane.id,
