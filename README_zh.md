@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="build/icon-128.png" alt="EasyAgentCli" width="80" />
+  <img src="build/icon-128.png" alt="EasyAgentCli" width="100" />
 </p>
 
 <h1 align="center">EasyAgentCli</h1>
