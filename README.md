@@ -94,9 +94,3 @@ When in Leave Mode, send messages to your bot:
 ## Author
 
 **haibindev** — [https://haibindev.github.io/](https://haibindev.github.io/)
-
-### WeChat Official Account
-
-Follow "**海滨code**" for more AI dev tools and tech sharing.
-
-<img src="build/wechat-qrcode.jpg" alt="海滨code WeChat" width="200" />
