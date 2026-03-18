@@ -99,4 +99,4 @@ When in Leave Mode, send messages to your bot:
 
 Follow "**海滨code**" for more AI dev tools and tech sharing.
 
-<img src="build/wechat-qrcode.jpg" alt="海滨code WeChat" width="100" />
+<img src="build/wechat-qrcode.jpg" alt="海滨code WeChat" width="200" />

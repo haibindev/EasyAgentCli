@@ -99,4 +99,4 @@ npx electron-builder --win --dir
 
 关注「**海滨code**」公众号，获取更多 AI 开发工具和技术分享。
 
-<img src="build/wechat-qrcode.jpg" alt="海滨code 公众号" width="100" />
+<img src="build/wechat-qrcode.jpg" alt="海滨code 公众号" width="200" />
