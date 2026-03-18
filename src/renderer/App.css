@@ -67,7 +67,7 @@ html, body, #root {
   gap: 6px;
   min-width: 0;
   justify-content: center;
-  -webkit-app-region: no-drag;
+  /* inherit drag from toolbar — child hints are no-drag */
 }
 
 .toolbar-right {
@@ -317,6 +317,7 @@ html, body, #root {
   padding: 2px 8px;
   border-radius: 4px;
   white-space: nowrap;
+  -webkit-app-region: no-drag;
 }
 
 .toolbar-hint-leave {
