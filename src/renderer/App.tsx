@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { PaneInfo, PaneType, BridgeStatus, LayoutMode, YoloLevel, AgentInfo } from './types'
 import { useI18n } from './i18n-context'
 import { getAgentIcon, ShellIcon } from './components/AgentIcons'
@@ -26,6 +26,7 @@ function saveLayout(mode: LayoutMode): void {
 
 export default function App() {
   const { t } = useI18n()
+  const paneAreaRef = useRef<HTMLDivElement>(null)
   const [panes, setPanes] = useState<PaneInfo[]>([])
   const [activePane, setActivePane] = useState<string | null>(null)
   const [leaveMode, setLeaveMode] = useState(false)
@@ -223,18 +224,33 @@ export default function App() {
     </div>
   )
 
-  // Scrollable overflow: fix row height to 1/layout.rows of the container.
-  // When actualRows > layout.rows, the grid exceeds 100% height and the
-  // pane-area scrolls to reveal the extra rows.
-  const gridStyle: React.CSSProperties = {
+  // Row style: each row fills exactly 1/rows of the visible pane-area height.
+  // When actualRows > rows the grid overflows; scroll is driven programmatically.
+  const rowStyle: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: `repeat(${cols}, 1fr)`,
-    gridTemplateRows: `repeat(${actualRows}, 1fr)`,
     gap: '2px',
-    width: '100%',
-    height: actualRows > rows ? `${(actualRows / rows) * 100}%` : '100%',
+    height: `calc(100% / ${rows})`,
+    flexShrink: 0,
     background: 'var(--border)',
   }
+
+  // Activate a pane from the sidebar: focus it if visible, else scroll its row to top.
+  const handleSidebarActivate = useCallback((id: string) => {
+    setActivePane(id)
+    setShowSettings(false)
+    const paneIndex = orderedPanes.findIndex(p => p.id === id)
+    if (paneIndex < 0) return
+    const paneRow = Math.floor(paneIndex / cols)
+    const el = paneAreaRef.current
+    if (!el) return
+    const rowHeight = el.clientHeight / rows
+    const topRow = Math.round(el.scrollTop / rowHeight)
+    const isVisible = paneRow >= topRow && paneRow < topRow + rows
+    if (!isVisible) {
+      el.scrollTo({ top: paneRow * rowHeight, behavior: 'smooth' })
+    }
+  }, [orderedPanes, cols, rows])
 
   return (
     <div className="app">
@@ -252,13 +268,13 @@ export default function App() {
           panes={orderedPanes}
           activePane={activePane}
           agents={agents}
-          onActivate={(id) => { setActivePane(id); setShowSettings(false) }}
+          onActivate={handleSidebarActivate}
           onAddPane={handleAddPane}
           onReorder={handleReorder}
           settingsOpen={showSettings}
           onSetSettingsOpen={setShowSettings}
         />
-        <div className="pane-area">
+        <div className="pane-area" ref={paneAreaRef}>
           {/* Terminal grid — always mounted so xterm stays alive */}
           {panes.length === 0 ? (
             <div className="empty-state">
@@ -278,17 +294,19 @@ export default function App() {
               </div>
             </div>
           ) : (
-            <div style={gridStyle}>
-              {grid.flat().map((cell, idx) =>
-                cell ? (
-                  <div key={cell.id} className="grid-cell">
-                    {renderPane(cell)}
-                  </div>
-                ) : (
-                  renderEmptySlot(`empty-${idx}`)
-                )
-              )}
-            </div>
+            grid.map((row, r) => (
+              <div key={r} style={rowStyle}>
+                {row.map((cell, c) =>
+                  cell ? (
+                    <div key={cell.id} className="grid-cell">
+                      {renderPane(cell)}
+                    </div>
+                  ) : (
+                    renderEmptySlot(`empty-${r}-${c}`)
+                  )
+                )}
+              </div>
+            ))
           )}
 
           {/* Settings overlay — floats above grid without unmounting terminals */}

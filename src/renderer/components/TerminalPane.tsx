@@ -142,8 +142,13 @@ export default function TerminalPane({ pane, paneIndex, active, onActivate, onCl
       } catch { /* ignore */ }
     }
 
-    // Fit after opening (need a frame for DOM to settle)
-    requestAnimationFrame(safeFit)
+    // Fit after opening and focus the terminal (need a frame for DOM to settle)
+    // Note: the active-focus effect runs before the terminal is created, so we
+    // must also focus here on initial mount.
+    requestAnimationFrame(() => {
+      safeFit()
+      term.focus()
+    })
 
     // Ctrl+C with selection → copy instead of sending SIGINT
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
@@ -176,19 +181,15 @@ export default function TerminalPane({ pane, paneIndex, active, onActivate, onCl
       window.api.writePane(pane.id, data)
     })
 
-    // Attach composition listeners to the xterm helper textarea
-    // (must wait a frame for xterm to create the DOM element)
-    requestAnimationFrame(() => {
-      const textarea = containerRef.current?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null
-      if (!textarea) return
-      textarea.addEventListener('compositionstart', () => {
-        isComposing.current = true
-      })
-      textarea.addEventListener('compositionend', (e: CompositionEvent) => {
-        isComposing.current = false
-        if (e.data) window.api.writePane(pane.id, e.data)
-      })
-    })
+    // Attach IME composition listeners on the container (bubbles from xterm's
+    // internal textarea). We only manage the isComposing flag here — xterm
+    // itself forwards the final composed text via its own input-event handler,
+    // which fires onData. Sending the text here too would cause a double-write.
+    const container = containerRef.current
+    const onCompositionStart = () => { isComposing.current = true }
+    const onCompositionEnd = () => { isComposing.current = false }
+    container.addEventListener('compositionstart', onCompositionStart)
+    container.addEventListener('compositionend', onCompositionEnd)
 
     // Output: main process PTY → terminal display
     const unsubOutput = window.api.onPaneOutput((msg) => {
@@ -232,7 +233,6 @@ export default function TerminalPane({ pane, paneIndex, active, onActivate, onCl
     }
     window.addEventListener('resize', handleWindowResize)
 
-    const container = containerRef.current
     return () => {
       inputDisposable.dispose()
       unsubOutput()
@@ -242,6 +242,8 @@ export default function TerminalPane({ pane, paneIndex, active, onActivate, onCl
       resizeObserver.disconnect()
       window.removeEventListener('resize', handleWindowResize)
       container?.removeEventListener('contextmenu', handleContextMenu)
+      container?.removeEventListener('compositionstart', onCompositionStart)
+      container?.removeEventListener('compositionend', onCompositionEnd)
       try { term.dispose() } catch { /* prevent WebGL disposal errors from propagating */ }
       termRef.current = null
       fitRef.current = null

@@ -127,8 +127,10 @@ html, body, #root {
 /* === Pane Area === */
 .pane-area {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;       /* no mouse-wheel scroll; navigation is via sidebar */
+  scroll-behavior: smooth;
   position: relative;
   min-height: 0;
 }
