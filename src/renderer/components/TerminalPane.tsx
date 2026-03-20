@@ -24,6 +24,7 @@ interface Props {
   pane: PaneInfo
   paneIndex: number  // 1-based display index
   active: boolean
+  focusTrigger: number  // increment from parent to force re-focus (e.g. sidebar click)
   onActivate: () => void
   onClose: () => void
   onRestart: () => void
@@ -31,7 +32,7 @@ interface Props {
   onRename: (title: string) => void
 }
 
-export default function TerminalPane({ pane, paneIndex, active, onActivate, onClose, onRestart, onYoloChange, onRename }: Props) {
+export default function TerminalPane({ pane, paneIndex, active, focusTrigger, onActivate, onClose, onRestart, onYoloChange, onRename }: Props) {
   const { t } = useI18n()
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
@@ -60,12 +61,14 @@ export default function TerminalPane({ pane, paneIndex, active, onActivate, onCl
     if (e.key === 'Escape') setEditing(false)
   }, [handleRenameSubmit])
 
-  // Auto-focus terminal when pane becomes active
+  // Focus terminal when this pane becomes active, or when focusTrigger changes
+  // (sidebar click increments focusTrigger even if active pane doesn't change,
+  // ensuring the terminal reclaims focus after the sidebar button took it).
   useEffect(() => {
     if (active && termRef.current) {
-      termRef.current.focus()
+      requestAnimationFrame(() => termRef.current?.focus())
     }
-  }, [active])
+  }, [active, focusTrigger])
 
   useEffect(() => {
     if (!containerRef.current) return

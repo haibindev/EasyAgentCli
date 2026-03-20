@@ -29,6 +29,7 @@ export default function App() {
   const paneAreaRef = useRef<HTMLDivElement>(null)
   const [panes, setPanes] = useState<PaneInfo[]>([])
   const [activePane, setActivePane] = useState<string | null>(null)
+  const [focusTrigger, setFocusTrigger] = useState(0)
   const [leaveMode, setLeaveMode] = useState(false)
   const [bridgeStatus, setBridgeStatus] = useState<BridgeStatus>({
     serverRunning: false, clientCount: 0, leaveMode: false
@@ -196,6 +197,7 @@ export default function App() {
           pane={pane}
           paneIndex={idx}
           active={activePane === pane.id}
+          focusTrigger={activePane === pane.id ? focusTrigger : 0}
           onActivate={() => setActivePane(pane.id)}
           onClose={() => handleClosePane(pane.id)}
           onRestart={() => handleRestartPane(pane.id)}
@@ -236,9 +238,12 @@ export default function App() {
   }
 
   // Activate a pane from the sidebar: focus it if visible, else scroll its row to top.
+  // Always increment focusTrigger so the terminal reclaims focus even if the
+  // active pane didn't change (sidebar click moves browser focus to the button).
   const handleSidebarActivate = useCallback((id: string) => {
     setActivePane(id)
     setShowSettings(false)
+    setFocusTrigger(t => t + 1)
     const paneIndex = orderedPanes.findIndex(p => p.id === id)
     if (paneIndex < 0) return
     const paneRow = Math.floor(paneIndex / cols)
