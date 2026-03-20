@@ -14,7 +14,13 @@
 
 ---
 
-在多窗格网格中并排运行多个 AI Agent CLI，通过飞书、Discord、Telegram 在手机上远程监控和操作所有终端。
+AI Agent 最适合放手让它跑——但现实生活不会等你守着屏幕。
+
+**EasyAgentCli** 让你在原生多窗格界面中并排运行 Claude Code、Gemini、Kimi 等 Agent，完整使用每个 CLI 的原生功能。需要外出时，一键开启**离开模式**——Agent 继续跑，你通过手机上的飞书、Discord 或 Telegram 随时监控、随时操作。
+
+> 再也不怕出门耽误了 Agent 的进度。
+> 再也不怕 Agent 繁忙影响了你的生活。
+> Agent 干活，你自由。
 
 ![截图](assets/screenshot-zh.png)
 
