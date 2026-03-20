@@ -14,20 +14,32 @@
 
 ---
 
-在多窗格网格中运行 AI Agent（Claude Code、Codex 等），通过飞书、Discord、Telegram 在手机上远程监控和操作终端。
+在多窗格网格中并排运行多个 AI Agent CLI，通过飞书、Discord、Telegram 在手机上远程监控和操作所有终端。
 
 ![截图](assets/screenshot-zh.png)
 
 ## 功能特性
 
-- **多窗格终端网格** — 多个 AI Agent 会话并排运行，窗格可调整大小，支持 1-9 格灵活布局
-- **多种 Agent 支持** — 每个窗格可启动 Claude Code、Codex、PowerShell 或任意 Shell
+- **多窗格终端网格** — 多个 AI Agent 会话并排运行，支持 1×1 至 4×4 灵活布局
+- **5 种内置 Agent** — Claude Code、Codex、Gemini CLI、Kimi Code、Aider，启动时自动检测
 - **离开模式** — 离开电脑后，通过即时通讯应用远程监控和操作所有终端
 - **远程适配器** — 支持飞书、Discord、Telegram、Openclaw 中继
-- **智能通知** — 可配置心跳摘要和静默提醒，随时掌握终端状态
-- **终端功能** — 完整的复制粘贴支持、自动适配大小、链接检测、滚动历史
-- **会话持久化** — 重启后可恢复 Claude Code 会话
-- **双语界面** — 中文和英文切换
+- **自动化** — 可配置心跳摘要和静默提醒；支持 AI 智能摘要和 AI 对话（通过已安装的 Agent）
+- **会话持久化** — 重启后可恢复 Claude Code 和 Codex 会话
+- **终端功能** — 完整复制粘贴、自动适配大小、链接检测、滚动历史、中文输入法支持
+- **双语界面** — 中英文随时切换
+
+## 支持的 Agent
+
+| Agent | 命令 | 跳过权限参数 |
+|-------|------|------------|
+| Claude Code | `claude` | `--dangerously-skip-permissions` |
+| Codex | `codex` | `--dangerously-bypass-approvals-and-sandbox` |
+| Gemini CLI | `gemini` | `--yolo` |
+| Kimi Code | `kimi` | `--yolo` |
+| Aider | `aider` | `--yes` |
+
+启动时自动检测已安装的 Agent。可在**设置 → 自动化**中查看安装状态并手动刷新。
 
 ## 快速开始
 
@@ -57,7 +69,7 @@ npx electron-builder --win --dir
 
 ## 远程适配器配置
 
-点击工具栏齿轮图标进入适配器配置。
+打开**设置 → 通道配置**进行适配器配置。
 
 ![设置](assets/screenshot-settings-zh.png)
 
@@ -70,6 +82,16 @@ npx electron-builder --win --dir
 
 开启工具栏的**离开模式**后，终端事件将转发到已配置的通道。
 
+## 自动化设置
+
+**设置 → 自动化**可配置 Agent 检测、AI 助手和通知策略。
+
+![自动化设置](assets/screenshot-settings-auto-zh.png)
+
+- **AGENT** — 查看已安装的 Agent CLI；点击"刷新"重新检测
+- **AI 助手** — 开启智能摘要（AI 重写心跳/完成事件输出）和 AI 对话（普通消息由 AI 回复）
+- **通知策略** — 设置心跳间隔和静默超时，每项均可单独开关
+
 ## 远程指令
 
 离开模式下，向机器人发送消息：
@@ -79,6 +101,15 @@ npx electron-builder --win --dir
 | `#1 你的消息` | 发送输入到终端窗格 #1 |
 | `#2 同意执行` | 发送输入到终端窗格 #2 |
 | 任意文本 | 发送到当前焦点 / 第一个窗格 |
+
+## 键盘快捷键
+
+| 快捷键 | 功能 |
+|--------|------|
+| `Ctrl+Tab` | 切换到下一个窗格 |
+| `Ctrl+Shift+Tab` | 切换到上一个窗格 |
+| `Ctrl+W` | 关闭当前窗格 |
+| `Ctrl+Shift+R` | 重启当前窗格 |
 
 ## 技术栈
 

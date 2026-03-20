@@ -14,20 +14,32 @@
 
 ---
 
-Run AI agents (Claude Code, Codex, etc.) in a multi-pane grid. Monitor and control terminals remotely from Feishu, Discord, Telegram on your phone.
+Run multiple AI agent CLIs side by side in a resizable grid. Monitor and control all terminals remotely from Feishu, Discord, or Telegram on your phone.
 
 ![screenshot](assets/screenshot-en.png)
 
 ## Features
 
-- **Multi-Pane Terminal Grid** — Run multiple AI agent sessions side by side with resizable panes and flexible layouts (1-9 slots)
-- **Multiple Agent Support** — Launch Claude Code, Codex, PowerShell, or any shell in each pane
-- **Leave Mode** — Step away from your computer and monitor/control all terminals remotely via messaging apps
-- **Remote Adapters** — Connect through Feishu (Lark), Discord, Telegram, or Openclaw relay
-- **Smart Notifications** — Configurable heartbeat summaries and idle alerts keep you informed
-- **Terminal Features** — Full copy/paste support, auto-fit resize, web link detection, scroll history
-- **Session Persistence** — Resume Claude Code sessions across restarts
-- **Bilingual UI** — Chinese and English interface
+- **Multi-Pane Terminal Grid** — Run multiple AI agent sessions side by side with flexible layouts (1×1 to 4×4)
+- **5 Built-in Agents** — Claude Code, Codex, Gemini CLI, Kimi Code, Aider — auto-detected on startup
+- **Leave Mode** — Step away and monitor / control all terminals remotely via messaging apps
+- **Remote Adapters** — Feishu (Lark), Discord, Telegram, Openclaw relay
+- **Automation** — Configurable heartbeat summaries and idle alerts; optional AI-powered smart summaries and AI chat via any installed agent
+- **Session Persistence** — Resume Claude Code and Codex sessions across restarts
+- **Terminal Features** — Full copy/paste, auto-fit resize, link detection, scroll history, IME input
+- **Bilingual UI** — Chinese / English, switchable at runtime
+
+## Supported Agents
+
+| Agent | Command | Bypass Flag |
+|-------|---------|-------------|
+| Claude Code | `claude` | `--dangerously-skip-permissions` |
+| Codex | `codex` | `--dangerously-bypass-approvals-and-sandbox` |
+| Gemini CLI | `gemini` | `--yolo` |
+| Kimi Code | `kimi` | `--yolo` |
+| Aider | `aider` | `--yes` |
+
+Agents are auto-detected at startup. Go to **Settings → Automation** to see which are installed and refresh the detection.
 
 ## Quick Start
 
@@ -57,7 +69,7 @@ Output: `dist-electron/win-unpacked/`
 
 ## Remote Adapter Setup
 
-Click the gear icon in the toolbar to configure adapters.
+Open **Settings → Channels** to configure adapters.
 
 ![settings](assets/screenshot-settings-en.png)
 
@@ -70,6 +82,16 @@ Click the gear icon in the toolbar to configure adapters.
 
 Enable **Leave Mode** (toolbar toggle) to start forwarding terminal events to your configured channels.
 
+## Automation Settings
+
+**Settings → Automation** lets you configure agent detection, AI assist, and notification timing.
+
+![automation settings](assets/screenshot-settings-auto-en.png)
+
+- **AGENTS** — See which agent CLIs are installed; click Refresh to re-detect
+- **AI ASSIST** — Enable Smart Summary (AI rewrites heartbeat/done events) and AI Chat (plain messages answered by AI)
+- **Notification Timing** — Set heartbeat interval and idle timeout; each can be toggled on/off independently
+
 ## Remote Commands
 
 When in Leave Mode, send messages to your bot:
@@ -78,7 +100,16 @@ When in Leave Mode, send messages to your bot:
 |---------|--------|
 | `#1 your message` | Send input to terminal pane #1 |
 | `#2 approve this` | Send input to terminal pane #2 |
-| Any text | Sent to the focused / first pane |
+| Any text | Sent to the active / first pane |
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Tab` | Next pane |
+| `Ctrl+Shift+Tab` | Previous pane |
+| `Ctrl+W` | Close active pane |
+| `Ctrl+Shift+R` | Restart active pane |
 
 ## Tech Stack
 
