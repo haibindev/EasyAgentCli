@@ -22,7 +22,7 @@ AI agents work best when left to run — but life doesn't pause for your termina
 
 **EasyAgentCli** lets you run Claude Code, Gemini, Kimi, and more side by side in a native multi-pane grid, with full access to every CLI feature. When you need to step away, hit **Leave Mode** — your agents keep running, and you stay in control from your phone via Feishu, Discord, or Telegram.
 
-> No more babysitting terminals. No more missing a confirmation prompt while you're out.
+> No more babysitting terminals. No more missing a confirmation prompt while you're out.  
 > Your agents work. You live.
 
 ![screenshot](assets/screenshot-en.png)
