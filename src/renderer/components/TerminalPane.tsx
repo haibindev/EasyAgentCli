@@ -153,9 +153,15 @@ export default function TerminalPane({ pane, paneIndex, active, focusTrigger, on
       term.focus()
     })
 
-    // Ctrl+C with selection → copy instead of sending SIGINT
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
       if (e.type !== 'keydown') return true
+      // CJK IME fix: return false so xterm does NOT run its internal
+      // CompositionHelper.keydown(), which would forward raw pinyin keystrokes
+      // to the PTY and break the composition. The compositionend event is
+      // registered directly on the textarea inside xterm and still fires,
+      // so the final composed characters reach onData correctly.
+      if (e.isComposing || e.keyCode === 229) return false
+      // Ctrl+C with selection → copy instead of sending SIGINT
       if (e.ctrlKey && !e.shiftKey && e.key === 'c' && term.hasSelection()) {
         navigator.clipboard.writeText(term.getSelection())
         term.clearSelection()
