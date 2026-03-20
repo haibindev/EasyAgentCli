@@ -1,6 +1,6 @@
 {
   "name": "easy-agent-cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Run AI agents (Claude Code, Codex) in multi-pane grid. Monitor and control terminals from Feishu, Discord, Telegram on your phone.",
   "author": "haibindev",
   "license": "MIT",
