@@ -1,16 +1,20 @@
-<p align="center">
-  <img src="build/icon-128.png" alt="EasyAgentCli" width="100" />
-</p>
+<div align="center">
 
-<h1 align="center">EasyAgentCli</h1>
+<img src="build/icon-128.png" alt="EasyAgentCli" width="100" />
 
-<p align="center">
-  Multi-Pane AI Agent Terminal Manager
-</p>
+# EasyAgentCli
 
-<p align="center">
-  <a href="README_zh.md">中文文档</a>
-</p>
+Multi-Pane AI Agent Terminal Manager
+
+[![Electron](https://img.shields.io/badge/Electron-41-47848F?logo=electron&logoColor=white)](https://electronjs.org)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)](https://reactjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?logo=typescript&logoColor=white)](https://typescriptlang.org)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/haibindev/EasyAgentCli?style=social)](https://github.com/haibindev/EasyAgentCli)
+
+[中文文档](README_zh.md)
+
+</div>
 
 ---
 
@@ -22,6 +26,20 @@ AI agents work best when left to run — but life doesn't pause for your termina
 > Your agents work. You live.
 
 ![screenshot](assets/screenshot-en.png)
+
+## Why EasyAgentCli?
+
+A typical scenario:
+
+1. You have 3 Claude Code sessions running in parallel, each working on a different repo
+2. One of them hits a confirmation prompt — you don't want to stare at the screen
+3. **Enable Leave Mode** → go to a meeting / grab lunch / head home
+4. Claude needs approval → Feishu / Discord / Telegram pushes a notification to your phone
+5. Reply `y` on your phone → the terminal continues
+6. Task completes → you get a ✅ notification
+7. Send `/screen` anytime to see the terminal, `/log 50` for recent output
+
+**In short: turn your AI agent terminals into a chat conversation on your phone.**
 
 ## Features
 
@@ -105,6 +123,10 @@ When in Leave Mode, send messages to your bot:
 |---------|--------|
 | `#1 your message` | Send input to terminal pane #1 |
 | `#2 approve this` | Send input to terminal pane #2 |
+| `/screen` | Get a 60-line terminal snapshot |
+| `/log [n]` | Get last n lines of output (default 20) |
+| `y` or `yes` | Confirm current prompt |
+| `n` or `no` | Reject current prompt |
 | Any text | Sent to the active / first pane |
 
 ## Keyboard Shortcuts
@@ -116,12 +138,50 @@ When in Leave Mode, send messages to your bot:
 | `Ctrl+W` | Close active pane |
 | `Ctrl+Shift+R` | Restart active pane |
 
+## Architecture
+
+```
+Electron main process
+├── index.ts              → window management, IPC, adapter lifecycle
+├── pty-manager.ts        → PTY create/restart/destroy, event detection
+└── bridge/
+    ├── analyzer.ts       → terminal output pattern matching
+    ├── message-router.ts → command parsing, event routing
+    └── adapters/
+        ├── feishu.ts     → Feishu bot
+        ├── discord.ts    → Discord bot
+        ├── telegram.ts   → Telegram bot
+        └── openclaw.ts   → Openclaw WebSocket relay
+
+Renderer (React + xterm.js)
+├── App.tsx               → grid layout, state management
+└── components/
+    ├── Toolbar.tsx       → new pane, layout, settings
+    ├── TerminalPane.tsx  → xterm.js terminal wrapper
+    ├── StatusBar.tsx     → pane status
+    ├── NewPaneDialog.tsx → pane creation dialog
+    └── AdapterSettings.tsx → IM adapter config
+```
+
 ## Tech Stack
 
-- **Electron** + **React** + **TypeScript**
-- **xterm.js** — terminal emulation
-- **node-pty** — native PTY backend
-- **electron-vite** — build tooling
+| Category | Technology |
+|----------|-----------|
+| Desktop | Electron 41 |
+| UI | React 18 + TypeScript |
+| Terminal | xterm.js |
+| PTY | node-pty |
+| Build | electron-vite |
+| Feishu | @larksuiteoapi/node-sdk |
+| Discord | discord.js |
+| Telegram | Bot API (zero dependencies) |
+
+## Contributing
+
+Issues and PRs are welcome!
+
+- [Report a bug](https://github.com/haibindev/EasyAgentCli/issues) or suggest a feature
+- Give the project a ⭐ Star if you find it useful
 
 ## License
 
