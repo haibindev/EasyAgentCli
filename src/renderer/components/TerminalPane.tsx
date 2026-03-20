@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { WebglAddon } from '@xterm/addon-webgl'
 import '@xterm/xterm/css/xterm.css'
 import type { PaneInfo, YoloLevel } from '../types'
 import { useI18n } from '../i18n-context'
@@ -8,7 +9,9 @@ import { useI18n } from '../i18n-context'
 const TYPE_COLORS: Record<string, string> = {
   claude: '#2ea043',
   codex: '#388bfd',
-  shell: '#6e7681'
+  gemini: '#4285f4',
+  aider: '#e8a838',
+  shell: '#6e7681',
 }
 
 function shortenPath(p: string): string {
@@ -19,6 +22,7 @@ function shortenPath(p: string): string {
 
 interface Props {
   pane: PaneInfo
+  paneIndex: number  // 1-based display index
   active: boolean
   onActivate: () => void
   onClose: () => void
@@ -27,7 +31,7 @@ interface Props {
   onRename: (title: string) => void
 }
 
-export default function TerminalPane({ pane, active, onActivate, onClose, onRestart, onYoloChange, onRename }: Props) {
+export default function TerminalPane({ pane, paneIndex, active, onActivate, onClose, onRestart, onYoloChange, onRename }: Props) {
   const { t } = useI18n()
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
@@ -89,9 +93,9 @@ export default function TerminalPane({ pane, active, onActivate, onClose, onRest
         white: '#b1bac4',
         brightWhite: '#f0f6fc'
       },
-      fontFamily: '"Cascadia Code", "JetBrains Mono", "Fira Code", "Consolas", monospace',
-      fontSize: 13,
-      lineHeight: 1.35,
+      fontFamily: '"Cascadia Mono", "Cascadia Code", "Consolas", "JetBrains Mono", monospace',
+      fontSize: 14,
+      lineHeight: 1.2,
       cursorBlink: true,
       cursorStyle: 'block',
       scrollback: 5000,
@@ -105,11 +109,27 @@ export default function TerminalPane({ pane, active, onActivate, onClose, onRest
     termRef.current = term
     fitRef.current = fitAddon
 
-    // Track last known size to avoid no-op resizes (ConPTY repaints on every resize)
+    // Use WebGL renderer for sharper text (especially CJK bold)
+    // Must load after terminal is fully rendered
+    requestAnimationFrame(() => {
+      try {
+        const webgl = new WebglAddon()
+        webgl.onContextLoss(() => {
+          try { webgl.dispose() } catch { /* ignore */ }
+          // Force canvas re-render after falling back from WebGL
+          requestAnimationFrame(() => {
+            try { term.refresh(0, term.rows - 1) } catch { /* ignore */ }
+          })
+        })
+        term.loadAddon(webgl)
+      } catch {
+        // WebGL not available, fall back to canvas
+      }
+    })
+
+    // Track last known size to avoid no-op resizes
     let lastCols = 0
     let lastRows = 0
-    // Suppress output flag — absorbs ConPTY repaint data during resize
-    let suppressOutput = false
 
     const safeFit = () => {
       try {
@@ -117,10 +137,7 @@ export default function TerminalPane({ pane, active, onActivate, onClose, onRest
         if (term.cols !== lastCols || term.rows !== lastRows) {
           lastCols = term.cols
           lastRows = term.rows
-          // Briefly suppress output to absorb ConPTY viewport repaint
-          suppressOutput = true
           window.api.resizePane(pane.id, term.cols, term.rows)
-          setTimeout(() => { suppressOutput = false }, 150)
         }
       } catch { /* ignore */ }
     }
@@ -128,26 +145,12 @@ export default function TerminalPane({ pane, active, onActivate, onClose, onRest
     // Fit after opening (need a frame for DOM to settle)
     requestAnimationFrame(safeFit)
 
-    // Copy support: Ctrl+C copies selection (otherwise sends ^C), Ctrl+Shift+C always copies
+    // Ctrl+C with selection → copy instead of sending SIGINT
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
       if (e.type !== 'keydown') return true
-      // Ctrl+Shift+C → always copy
-      if (e.ctrlKey && e.shiftKey && e.key === 'C') {
-        const sel = term.getSelection()
-        if (sel) navigator.clipboard.writeText(sel)
-        return false
-      }
-      // Ctrl+C with selection → copy instead of sending SIGINT
       if (e.ctrlKey && !e.shiftKey && e.key === 'c' && term.hasSelection()) {
         navigator.clipboard.writeText(term.getSelection())
         term.clearSelection()
-        return false
-      }
-      // Ctrl+Shift+V → paste
-      if (e.ctrlKey && e.shiftKey && e.key === 'V') {
-        navigator.clipboard.readText().then(text => {
-          if (text) window.api.writePane(pane.id, text)
-        })
         return false
       }
       return true
@@ -162,15 +165,34 @@ export default function TerminalPane({ pane, active, onActivate, onClose, onRest
     }
     containerRef.current.addEventListener('contextmenu', handleContextMenu)
 
-    // Input: terminal keystrokes → main process PTY
+    // IME composition guard: block onData while IME is composing, then send
+    // the composed result on compositionend. Without this, each raw pinyin
+    // keystroke is forwarded to the PTY before the IME can compose it.
+    const isComposing = { current: false }
+
+    // Input: terminal keystrokes → main process PTY (blocked during IME)
     const inputDisposable = term.onData((data) => {
+      if (isComposing.current) return
       window.api.writePane(pane.id, data)
     })
 
+    // Attach composition listeners to the xterm helper textarea
+    // (must wait a frame for xterm to create the DOM element)
+    requestAnimationFrame(() => {
+      const textarea = containerRef.current?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null
+      if (!textarea) return
+      textarea.addEventListener('compositionstart', () => {
+        isComposing.current = true
+      })
+      textarea.addEventListener('compositionend', (e: CompositionEvent) => {
+        isComposing.current = false
+        if (e.data) window.api.writePane(pane.id, e.data)
+      })
+    })
+
     // Output: main process PTY → terminal display
-    // Skip output during resize to absorb ConPTY viewport repaint
     const unsubOutput = window.api.onPaneOutput((msg) => {
-      if (msg.id === pane.id && !suppressOutput) {
+      if (msg.id === pane.id) {
         term.write(msg.data)
       }
     })
@@ -201,6 +223,15 @@ export default function TerminalPane({ pane, active, onActivate, onClose, onRest
     })
     resizeObserver.observe(containerRef.current)
 
+    // Also handle window resize events (dispatched after pane close to force refresh)
+    const handleWindowResize = () => {
+      try {
+        fitAddon.fit()
+        term.refresh(0, term.rows - 1)
+      } catch { /* ignore */ }
+    }
+    window.addEventListener('resize', handleWindowResize)
+
     const container = containerRef.current
     return () => {
       inputDisposable.dispose()
@@ -209,8 +240,9 @@ export default function TerminalPane({ pane, active, onActivate, onClose, onRest
       unsubClear()
       if (resizeTimer) clearTimeout(resizeTimer)
       resizeObserver.disconnect()
+      window.removeEventListener('resize', handleWindowResize)
       container?.removeEventListener('contextmenu', handleContextMenu)
-      term.dispose()
+      try { term.dispose() } catch { /* prevent WebGL disposal errors from propagating */ }
       termRef.current = null
       fitRef.current = null
     }
@@ -226,6 +258,7 @@ export default function TerminalPane({ pane, active, onActivate, onClose, onRest
           className="pane-type-bar"
           style={{ background: TYPE_COLORS[pane.type] || TYPE_COLORS.shell }}
         />
+        <span className="pane-index">#{paneIndex}</span>
         {editing ? (
           <input
             ref={inputRef}

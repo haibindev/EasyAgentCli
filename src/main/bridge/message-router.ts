@@ -1,4 +1,18 @@
 import type { PtyManager, PaneInfo } from '../pty-manager'
+import { callAgentOnce, type AiConfig, DEFAULT_AI_CONFIG } from '../ai-service'
+
+/** Structured event for IM adapters (cards / rich messages) */
+export type PaneEventType = 'confirm' | 'done' | 'error' | 'idle' | 'heartbeat' | 'exit'
+
+export interface PaneEvent {
+  type: PaneEventType
+  paneId: string
+  paneIndex: number      // 1-based
+  paneTitle: string
+  content: string
+  time: number
+  exitCode?: number      // only for 'exit'
+}
 
 /** Command parsed from user input */
 export interface ParsedCommand {
@@ -11,6 +25,9 @@ export interface ParsedCommand {
 export interface MessageAdapter {
   readonly name: string
   sendText(text: string): Promise<void>
+  sendEvent?(event: PaneEvent): Promise<void>
+  /** Send a status overview when leave mode is toggled (card format preferred) */
+  sendStatusSummary?(panes: PaneInfo[], entering: boolean): Promise<void>
   start(): Promise<void>
   stop(): Promise<void>
   isConnected(): boolean
@@ -23,8 +40,13 @@ export class MessageRouter {
   private activePane: string | null = null
   private lastConfirmPane: string | null = null  // most recent pane that requested confirmation
   private leaveMode = false
+  private aiConfig: AiConfig = { ...DEFAULT_AI_CONFIG }
 
   constructor(private ptyManager: PtyManager) {}
+
+  setAiConfig(config: AiConfig): void {
+    this.aiConfig = config
+  }
 
   addAdapter(adapter: MessageAdapter): void {
     this.adapters.set(adapter.name, adapter)
@@ -36,6 +58,7 @@ export class MessageRouter {
 
   setLeaveMode(enabled: boolean): void {
     this.leaveMode = enabled
+    if (enabled) this.broadcastLeaveStatus(true)
   }
 
   /** Called when a terminal event occurs (confirm/done/error/idle/heartbeat) */
@@ -46,29 +69,34 @@ export class MessageRouter {
     const idx = this.ptyManager.paneIndex(paneId)
     const title = pane?.title ?? paneId
 
-    let emoji = ''
-    switch (event.type) {
-      case 'confirm': emoji = '⚠️'; break
-      case 'done': emoji = '✅'; break
-      case 'error': emoji = '❌'; break
-      case 'idle': emoji = '💤'; break
-      case 'heartbeat': emoji = '📊'; break
-      case 'exit': emoji = '🛑'; break
-    }
-
-    // Track which pane last requested confirmation
     if (event.type === 'confirm') {
       this.lastConfirmPane = paneId
     }
 
-    let msg = `${emoji} [#${idx} ${title}] ${event.content}`
-
-    // For confirm events, add quick-reply hint
-    if (event.type === 'confirm') {
-      msg += `\n💡 回复 "${idx}y" 同意 / "${idx}n" 拒绝`
+    // Optionally replace raw content with AI-generated summary
+    let content = event.content
+    if (
+      this.aiConfig.summaryEnabled &&
+      (event.type === 'heartbeat' || event.type === 'done' || event.type === 'idle')
+    ) {
+      const snapshot = this.ptyManager.snapshot(paneId).slice(-20).join('\n')
+      if (snapshot) {
+        const prompt =
+          `请用1-3句话简洁总结以下AI终端的工作进展（不超过150字）。` +
+          `只输出摘要文字，不要额外解释：\n\n${snapshot}`
+        const summary = await callAgentOnce(this.aiConfig.agent, prompt)
+        if (summary) content = summary
+      }
     }
 
-    await this.broadcast(msg)
+    await this.broadcastEvent({
+      type: event.type as PaneEventType,
+      paneId,
+      paneIndex: idx,
+      paneTitle: title,
+      content,
+      time: event.time,
+    })
   }
 
   /** Called when a PTY process exits */
@@ -79,48 +107,82 @@ export class MessageRouter {
     const idx = this.ptyManager.paneIndex(paneId)
     const title = pane?.title ?? paneId
 
-    const msg = `🛑 [#${idx} ${title}] 进程退出 (code: ${exitCode})`
-    await this.broadcast(msg)
+    await this.broadcastEvent({
+      type: 'exit',
+      paneId,
+      paneIndex: idx,
+      paneTitle: title,
+      content: `进程退出 (code: ${exitCode})`,
+      time: Date.now(),
+      exitCode,
+    })
   }
 
   /** Handle incoming user message from any adapter */
   async handleMessage(adapterName: string, text: string): Promise<void> {
     const adapter = this.adapters.get(adapterName)
+    const cmd = this.parseCommand(text.trim())
 
-    // Not in leave mode: don't process commands, just hint
-    if (!this.leaveMode) {
+    // Terminal input (# prefix) requires leave mode; slash commands always work
+    if (!this.leaveMode && (cmd.type === 'input' || cmd.type === 'yes' || cmd.type === 'no')) {
       if (adapter) {
-        await adapter.sendText('💡 当前未开启离开模式，消息不会被处理。请在 EasyAgentCli 中开启「离开模式」后重试。')
+        await adapter.sendText('💡 当前未开启离开模式，终端输入不会被处理。请在 EasyAgentCli 中开启「离开模式」后重试。\n📖 输入 /help 查看可用命令')
       }
       return
     }
 
-    const cmd = this.parseCommand(text.trim())
+    // Plain message (no # or / prefix) → AI chat if enabled
+    if (cmd.type === 'unknown') {
+      const trimmed = text.trim()
+      if (this.aiConfig.chatEnabled && trimmed.length > 0 && adapter) {
+        const prompt = this.buildAiChatPrompt(trimmed)
+        const reply = await callAgentOnce(this.aiConfig.agent, prompt)
+        if (reply) await adapter.sendText(reply)
+      }
+      return
+    }
+
     const response = await this.executeCommand(cmd)
     if (adapter && response) {
       await adapter.sendText(response)
     }
   }
 
-  /** Parse user text into a command, supporting indexed replies like "1y", "2n" */
-  parseCommand(text: string): ParsedCommand {
-    // Indexed quick replies: "1y", "2n", "3y", "#1 y", "#2 n"
-    const indexedMatch = text.match(/^#?(\d+)\s*([yn])$/i)
-    if (indexedMatch) {
-      const paneIdx = parseInt(indexedMatch[1], 10)
-      const answer = indexedMatch[2].toLowerCase()
-      const panes = this.ptyManager.list()
-      if (paneIdx >= 1 && paneIdx <= panes.length) {
-        const targetId = panes[paneIdx - 1].id
-        return {
-          type: answer === 'y' ? 'yes' : 'no',
-          args: [],
-          targetPane: targetId
-        }
-      }
-    }
+  /** Build a context-aware prompt for AI chat replies */
+  private buildAiChatPrompt(userMessage: string): string {
+    const panes = this.ptyManager.list()
+    const paneLines = panes.length > 0
+      ? panes.map((p, i) => {
+          const statusLabel =
+            p.status === 'running' ? '运行中' :
+            p.status === 'confirm' ? '等待确认' :
+            p.status === 'done' ? '已完成' :
+            p.status === 'error' ? '错误' : '空闲'
+          const snapshot = this.ptyManager.snapshot(p.id).slice(-8).join('\n')
+          return `#${i + 1} ${p.title} (${p.type}) - ${statusLabel}` +
+            (snapshot ? `\n最近输出:\n${snapshot}` : '')
+        }).join('\n\n')
+      : '(当前无终端)'
 
-    // Slash commands
+    return [
+      '你是一个 AI 终端管理助手。你在监控以下 AI Agent 终端。',
+      '请用简洁中文回答用户的问题，聚焦于终端状态和任务进展。',
+      '',
+      '【当前终端状态】',
+      paneLines,
+      '',
+      `【用户】${userMessage}`,
+    ].join('\n')
+  }
+
+  /** Parse user text into a command.
+   *  - /cmd  → slash commands
+   *  - #N text → send to pane N  (#1 hello, #2y, #2 n)
+   *  - # text  → send to active pane
+   *  - anything else → ignored (returns 'unknown')
+   */
+  parseCommand(text: string): ParsedCommand {
+    // Slash commands: /panes, /help, etc.
     if (text.startsWith('/')) {
       const parts = text.slice(1).split(/\s+/)
       const name = parts[0].toLowerCase()
@@ -136,17 +198,43 @@ export class MessageRouter {
       }
     }
 
-    // Quick shortcuts (bare y/n → targets last confirming pane)
-    const lower = text.toLowerCase()
-    if (lower === 'y' || lower === '同意' || lower === 'yes' || lower === '确认') {
-      return { type: 'yes', args: [], targetPane: this.lastConfirmPane ?? undefined }
-    }
-    if (lower === 'n' || lower === '拒绝' || lower === 'no' || lower === '取消') {
-      return { type: 'no', args: [], targetPane: this.lastConfirmPane ?? undefined }
+    // # prefix: terminal input
+    if (text.startsWith('#')) {
+      const body = text.slice(1).trimStart()
+
+      // #N y/n — quick confirm/reject for pane N
+      const qrMatch = body.match(/^(\d+)\s*([yn])$/i)
+      if (qrMatch) {
+        const paneIdx = parseInt(qrMatch[1], 10)
+        const answer = qrMatch[2].toLowerCase()
+        const panes = this.ptyManager.list()
+        if (paneIdx >= 1 && paneIdx <= panes.length) {
+          return {
+            type: answer === 'y' ? 'yes' : 'no',
+            args: [],
+            targetPane: panes[paneIdx - 1].id,
+          }
+        }
+      }
+
+      // #N <text> — send text to pane N
+      const paneMatch = body.match(/^(\d+)\s+(.+)$/s)
+      if (paneMatch) {
+        const paneIdx = parseInt(paneMatch[1], 10)
+        const panes = this.ptyManager.list()
+        if (paneIdx >= 1 && paneIdx <= panes.length) {
+          return { type: 'input', args: [paneMatch[2]], targetPane: panes[paneIdx - 1].id }
+        }
+      }
+
+      // # <text> — send to active pane
+      if (body.length > 0) {
+        return { type: 'input', args: [body] }
+      }
     }
 
-    // Plain text → input to active pane
-    return { type: 'input', args: [text] }
+    // No # or / prefix → ignore (don't send to terminal)
+    return { type: 'unknown', args: [] }
   }
 
   private async executeCommand(cmd: ParsedCommand): Promise<string> {
@@ -166,11 +254,14 @@ export class MessageRouter {
       case 'no':
         return this.cmdInput('n', cmd.targetPane)
       case 'input':
-        return this.cmdInput(cmd.args[0])
+        return this.cmdInput(cmd.args[0], cmd.targetPane)
       case 'help':
         return this.cmdHelp()
       case 'unknown':
-        return `未知命令: /${cmd.args[0]}\n输入 /help 查看可用命令`
+        if (cmd.args.length > 0 && cmd.args[0]) {
+          return `未知命令: /${cmd.args[0]}\n输入 /help 查看可用命令`
+        }
+        return ''  // ignored message, no response
     }
   }
 
@@ -277,11 +368,12 @@ export class MessageRouter {
       '/log [n] — 查看最近 n 行 (默认20)',
       '/yolo [off|safe|full] — 查看/设置自动化级别',
       '',
-      '快捷回复:',
-      'y / 同意 — 确认（发送到最近请求确认的终端）',
-      'n / 拒绝 — 拒绝',
-      '1y / 2n — 对指定编号终端确认/拒绝',
-      '其他文字 — 直接输入到当前终端',
+      '终端输入 (# 前缀):',
+      '#1 你好 — 发送到终端 #1',
+      '#2y / #2n — 对终端 #2 确认/拒绝',
+      '# 文字 — 发送到当前活动终端',
+      '',
+      '⚠️ 不带 # 或 / 的消息会被忽略',
     ].join('\n')
   }
 
@@ -300,16 +392,66 @@ export class MessageRouter {
     return null
   }
 
-  private async broadcast(text: string): Promise<void> {
+  private async broadcastEvent(event: PaneEvent): Promise<void> {
     for (const adapter of this.adapters.values()) {
       if (adapter.isConnected()) {
         try {
-          await adapter.sendText(text)
+          if (adapter.sendEvent) {
+            await adapter.sendEvent(event)
+          } else {
+            await adapter.sendText(this.eventToText(event))
+          }
         } catch (err) {
           console.error(`[MessageRouter] Failed to send to ${adapter.name}:`, err)
         }
       }
     }
+  }
+
+  /** Broadcast leave mode status to all connected adapters */
+  private async broadcastLeaveStatus(entering: boolean): Promise<void> {
+    const panes = this.ptyManager.list()
+    for (const adapter of this.adapters.values()) {
+      if (!adapter.isConnected()) continue
+      try {
+        if (adapter.sendStatusSummary) {
+          await adapter.sendStatusSummary(panes, entering)
+        } else {
+          // Fallback to text
+          if (entering) {
+            const statusIcon = (p: PaneInfo) =>
+              p.status === 'running' ? '▶' :
+              p.status === 'confirm' ? '⚠' :
+              p.status === 'error' ? '✗' :
+              p.status === 'done' ? '✓' : '○'
+            const lines = panes.map((p, i) =>
+              `${statusIcon(p)} #${i + 1} ${p.title} (${p.type})`
+            )
+            const msg = panes.length > 0
+              ? `🚶 离开模式已开启\n\n📋 终端状态:\n${lines.join('\n')}\n\n💡 /help 查看可用命令`
+              : '🚶 离开模式已开启（当前无终端）'
+            await adapter.sendText(msg)
+          } else {
+            await adapter.sendText('🏠 离开模式已关闭')
+          }
+        }
+      } catch (err) {
+        console.error(`[MessageRouter] Failed to send leave status to ${adapter.name}:`, err)
+      }
+    }
+  }
+
+  private eventToText(event: PaneEvent): string {
+    const emojiMap: Record<string, string> = {
+      confirm: '⚠️', done: '✅', error: '❌',
+      idle: '💤', heartbeat: '📊', exit: '🛑',
+    }
+    const emoji = emojiMap[event.type] ?? ''
+    let msg = `${emoji} [#${event.paneIndex} ${event.paneTitle}] ${event.content}`
+    if (event.type === 'confirm') {
+      msg += `\n💡 回复 "#${event.paneIndex}y" 同意 / "#${event.paneIndex}n" 拒绝`
+    }
+    return msg
   }
 
   getStatus(): Record<string, boolean> {

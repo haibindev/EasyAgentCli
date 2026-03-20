@@ -1,6 +1,13 @@
-export type PaneType = 'claude' | 'codex' | 'shell'
+export type PaneType = string   // dynamic: 'claude' | 'codex' | 'gemini' | 'aider' | 'shell' | ...
 export type YoloLevel = 'off' | 'safe' | 'full'
 export type PaneStatus = 'running' | 'idle' | 'confirm' | 'done' | 'error'
+
+export interface AgentInfo {
+  cmd: string
+  label: string
+  type: string
+  available: boolean
+}
 
 export interface PaneInfo {
   id: string
@@ -17,6 +24,7 @@ export interface BridgeStatus {
   serverRunning: boolean
   clientCount: number
   leaveMode: boolean
+  adapters?: Record<string, boolean>
 }
 
 // Layout: supports axb grid via nested horizontal rows and vertical columns

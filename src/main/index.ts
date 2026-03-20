@@ -1,11 +1,13 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
+import { execFile } from 'child_process'
 import { PtyManager } from './pty-manager'
 import { BridgeServer } from './bridge/server'
 import { Discovery } from './bridge/discovery'
 import { MessageRouter } from './bridge/message-router'
 import { FeishuAdapter, type FeishuConfig } from './bridge/adapters/feishu'
+import { DEFAULT_AI_CONFIG, type AiConfig } from './ai-service'
 import { DiscordAdapter, type DiscordConfig } from './bridge/adapters/discord'
 import { OpenclawAdapter, type OpenclawConfig } from './bridge/adapters/openclaw'
 import { TelegramAdapter, type TelegramConfig } from './bridge/adapters/telegram'
@@ -58,7 +60,15 @@ async function startAdapter(name: string, configs: AdapterConfigs): Promise<stri
     messageRouter.removeAdapter(name)
 
     if (name === 'feishu' && configs.feishu?.enabled) {
-      const adapter = new FeishuAdapter(configs.feishu, onMsg)
+      const adapter = new FeishuAdapter(configs.feishu, onMsg, (learnedChatId) => {
+        // Persist auto-learned chatId so it survives app restarts
+        const freshConfigs = loadAdapterConfigs()
+        if (freshConfigs.feishu) {
+          freshConfigs.feishu.chatId = learnedChatId
+          saveAdapterConfigs(freshConfigs)
+          console.log(`[Feishu] Persisted learned chat_id: ${learnedChatId}`)
+        }
+      })
       messageRouter.addAdapter(adapter)
       await adapter.start()
       return adapter.isConnected() ? 'connected' : 'failed'
@@ -95,17 +105,28 @@ async function startAdapter(name: string, configs: AdapterConfigs): Promise<stri
 }
 
 function applyNotifySettings(configs: AdapterConfigs): void {
-  const notify = (configs as Record<string, unknown>)._notify as { heartbeatMin?: number; idleMin?: number } | undefined
+  const notify = (configs as Record<string, unknown>)._notify as {
+    heartbeatMin?: number; heartbeatEnabled?: boolean
+    idleMin?: number; idleEnabled?: boolean
+  } | undefined
   if (notify) {
     const hb = typeof notify.heartbeatMin === 'number' ? notify.heartbeatMin : 10
+    const hbEnabled = notify.heartbeatEnabled !== false
     const idle = typeof notify.idleMin === 'number' ? notify.idleMin : 15
-    ptyManager.setNotifyIntervals(hb, idle)
+    const idleEnabled = notify.idleEnabled !== false
+    ptyManager.setNotifyIntervals(hb, hbEnabled, idle, idleEnabled)
   }
+}
+
+function applyAiConfig(configs: AdapterConfigs): void {
+  const ai = (configs as Record<string, unknown>)._ai as Partial<AiConfig> | undefined
+  messageRouter.setAiConfig({ ...DEFAULT_AI_CONFIG, ...ai })
 }
 
 async function initAdapters(): Promise<void> {
   const configs = loadAdapterConfigs()
   applyNotifySettings(configs)
+  applyAiConfig(configs)
   if (configs.feishu?.enabled) await startAdapter('feishu', configs)
   if (configs.discord?.enabled) await startAdapter('discord', configs)
   if (configs.openclaw?.enabled) await startAdapter('openclaw', configs)
@@ -137,12 +158,23 @@ function saveSession(): void {
 function restoreSession(): void {
   try {
     const raw = readFileSync(getSessionPath(), 'utf-8')
-    const configs = JSON.parse(raw) as Array<{ type: string; cwd: string; yoloLevel: string; sessionId?: string; bypassPermissions?: boolean }>
+    const configs = JSON.parse(raw) as Array<{ type: string; cwd: string; yoloLevel: string; title?: string; sessionId?: string; bypassPermissions?: boolean; extraArgs?: string[] }>
     for (const cfg of configs) {
       const opts: import('./pty-manager').CreatePaneOpts = {}
-      if (cfg.sessionId) opts.resumeSessionId = cfg.sessionId
+      // Restore session ID for Claude (--resume <id>) and Codex (codex resume <id>)
+      if (cfg.sessionId) {
+        opts.resumeSessionId = cfg.sessionId
+      } else if (cfg.type === 'claude') {
+        // No session ID saved — fallback to --continue (most recent conversation)
+        opts.continueSession = true
+      }
       if (cfg.bypassPermissions) opts.bypassPermissions = true
+      if (cfg.extraArgs && cfg.extraArgs.length > 0) opts.extraArgs = cfg.extraArgs
       const pane = ptyManager.create(cfg.type, cfg.cwd, Object.keys(opts).length > 0 ? opts : undefined)
+      // Restore custom title
+      if (cfg.title) {
+        ptyManager.rename(pane.id, cfg.title)
+      }
       if (cfg.yoloLevel !== 'off') {
         ptyManager.setYolo(pane.id, cfg.yoloLevel as 'safe' | 'full')
       }
@@ -215,7 +247,7 @@ function createWindow(): void {
   })
 
   bridgeServer.on('statusChange', (status: { serverRunning: boolean; clientCount: number; leaveMode: boolean }) => {
-    safeSend('bridge:status', status)
+    safeSend('bridge:status', { ...status, adapters: messageRouter.getStatus() })
   })
 
   setupIPC()
@@ -227,10 +259,50 @@ function createWindow(): void {
   }
 }
 
+// ──── Agent CLI detection ────
+
+/** Known agent CLIs to probe */
+const KNOWN_AGENTS = [
+  { cmd: 'claude', label: 'Claude Code', type: 'claude' },
+  { cmd: 'codex', label: 'Codex', type: 'codex' },
+  { cmd: 'gemini', label: 'Gemini CLI', type: 'gemini' },
+  { cmd: 'kimi', label: 'Kimi Code', type: 'kimi' },
+  { cmd: 'aider', label: 'Aider', type: 'aider' },
+]
+
+export interface AgentInfo {
+  cmd: string
+  label: string
+  type: string
+  available: boolean
+}
+
+function probeCmd(cmd: string): Promise<boolean> {
+  const which = process.platform === 'win32' ? 'where' : 'which'
+  return new Promise(resolve => {
+    execFile(which, [cmd], { timeout: 5000 }, (err) => resolve(!err))
+  })
+}
+
+let cachedAgents: AgentInfo[] = []
+
+async function detectAgents(): Promise<AgentInfo[]> {
+  const results = await Promise.all(
+    KNOWN_AGENTS.map(async (a) => ({
+      ...a,
+      available: await probeCmd(a.cmd),
+    }))
+  )
+  cachedAgents = results
+  return results
+}
+
 function setupIPC(): void {
-  ipcMain.handle('pane:create', async (_, args: { type: string; cwd: string; bypassPermissions?: boolean }) => {
-    const opts = args.bypassPermissions ? { bypassPermissions: true } : undefined
-    return ptyManager.create(args.type, args.cwd, opts)
+  ipcMain.handle('pane:create', async (_, args: { type: string; cwd: string; bypassPermissions?: boolean; extraArgs?: string[] }) => {
+    const opts: import('./pty-manager').CreatePaneOpts = {}
+    if (args.bypassPermissions) opts.bypassPermissions = true
+    if (args.extraArgs && args.extraArgs.length > 0) opts.extraArgs = args.extraArgs
+    return ptyManager.create(args.type, args.cwd, Object.keys(opts).length > 0 ? opts : undefined)
   })
 
   ipcMain.handle('pane:close', async (_, id: string) => {
@@ -269,7 +341,7 @@ function setupIPC(): void {
     } else {
       discovery.stop()
     }
-    safeSend('bridge:status', bridgeServer.getStatus())
+    safeSend('bridge:status', { ...bridgeServer.getStatus(), adapters: messageRouter.getStatus() })
   })
 
   ipcMain.handle('bridge:getStatus', async () => {
@@ -296,6 +368,12 @@ function setupIPC(): void {
       return 'ok'
     }
 
+    // Apply AI config if changed
+    if (args.name === '_ai') {
+      applyAiConfig(configs)
+      return 'ok'
+    }
+
     // Restart the adapter
     const result = await startAdapter(args.name, configs)
     safeSend('bridge:status', {
@@ -307,6 +385,18 @@ function setupIPC(): void {
 
   ipcMain.handle('adapter:getStatus', async () => {
     return messageRouter.getStatus()
+  })
+
+  // Agent detection
+  ipcMain.handle('agents:detect', async () => {
+    return detectAgents()
+  })
+
+  ipcMain.handle('agents:list', async () => {
+    if (cachedAgents.length === 0) return detectAgents()
+    // Always base on KNOWN_AGENTS so newly added agents appear even with a stale cache
+    const cachedMap = new Map(cachedAgents.map(a => [a.type, a]))
+    return KNOWN_AGENTS.map(a => cachedMap.get(a.type) ?? { ...a, available: false })
   })
 
   // Dialog for selecting directory

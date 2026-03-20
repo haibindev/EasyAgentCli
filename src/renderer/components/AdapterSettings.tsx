@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useI18n } from '../i18n-context'
+import { getAgentIcon } from './AgentIcons'
 
 interface AdapterConfig {
   enabled: boolean
@@ -8,11 +9,21 @@ interface AdapterConfig {
 
 /** Global notification settings stored alongside adapter configs */
 interface NotifySettings {
+  heartbeatEnabled: boolean
   heartbeatMin: number  // minutes
+  idleEnabled: boolean
   idleMin: number       // minutes
 }
 
-const DEFAULT_NOTIFY: NotifySettings = { heartbeatMin: 10, idleMin: 15 }
+const DEFAULT_NOTIFY: NotifySettings = { heartbeatEnabled: true, heartbeatMin: 10, idleEnabled: true, idleMin: 15 }
+
+interface AiSettings {
+  summaryEnabled: boolean
+  chatEnabled: boolean
+  agent: string
+}
+
+const DEFAULT_AI: AiSettings = { summaryEnabled: false, chatEnabled: false, agent: 'claude' }
 
 interface Props {
   onClose: () => void
@@ -85,27 +96,96 @@ interface AdapterDef {
   extra?: React.ReactNode
 }
 
-type SettingsTab = 'channels' | 'notify'
+interface AgentInfo {
+  cmd: string
+  label: string
+  type: string
+  available: boolean
+}
 
-export default function AdapterSettings({ onClose }: Props) {
-  const { t } = useI18n()
+type SettingsTab = 'channels' | 'automation' | 'interface'
+
+// ── Icon-aware agent selector ──
+function AgentSelect({ value, onChange, agents }: {
+  value: string
+  onChange: (v: string) => void
+  agents: AgentInfo[]
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const options = agents.filter(a => a.available && ['claude', 'codex', 'gemini', 'kimi'].includes(a.type))
+  if (options.length === 0) options.push({ type: 'claude', label: 'Claude', cmd: 'claude', available: false })
+  const current = options.find(a => a.type === value) ?? options[0]
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        type="button"
+        className="agent-select-btn"
+        onClick={() => setOpen(o => !o)}
+      >
+        {getAgentIcon(current.type, 14)}
+        <span>{current.label}</span>
+        <span className="agent-select-arrow">{open ? '▴' : '▾'}</span>
+      </button>
+      {open && (
+        <div className="agent-select-dropdown">
+          {options.map(a => (
+            <button
+              key={a.type}
+              type="button"
+              className={`agent-select-option${a.type === value ? ' selected' : ''}`}
+              onClick={() => { onChange(a.type); setOpen(false) }}
+            >
+              {getAgentIcon(a.type, 14)}
+              <span>{a.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function AdapterSettings({ onClose, onAgentsRefresh }: Props & { onAgentsRefresh?: () => void }) {
+  const { t, lang, toggleLang } = useI18n()
   const [configs, setConfigs] = useState<Record<string, AdapterConfig>>({})
   const [status, setStatus] = useState<Record<string, boolean>>({})
   const [saving, setSaving] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [notify, setNotify] = useState<NotifySettings>(DEFAULT_NOTIFY)
-  const [tab, setTab] = useState<SettingsTab>('channels')
+  const [tab, setTab] = useState<SettingsTab>(() => {
+    try { return (localStorage.getItem('eac:settingsTab') as SettingsTab) || 'channels' } catch { return 'channels' }
+  })
+  const changeTab = (t: SettingsTab) => {
+    setTab(t)
+    try { localStorage.setItem('eac:settingsTab', t) } catch { /* ignore */ }
+  }
+  const [agents, setAgents] = useState<AgentInfo[]>([])
+  const [agentsLoading, setAgentsLoading] = useState(false)
+  const [aiConfig, setAiConfig] = useState<AiSettings>(DEFAULT_AI)
+  const [savingAi, setSavingAi] = useState(false)
 
   useEffect(() => {
     window.api.getAdapterConfigs().then(c => {
-      const loaded = c as Record<string, AdapterConfig> & { _notify?: NotifySettings }
-      // Extract notify settings
+      const loaded = c as Record<string, AdapterConfig> & { _notify?: NotifySettings; _ai?: Partial<AiSettings> }
       if (loaded._notify) {
         setNotify({ ...DEFAULT_NOTIFY, ...loaded._notify })
+      }
+      if (loaded._ai) {
+        setAiConfig({ ...DEFAULT_AI, ...loaded._ai })
       }
       setConfigs(loaded)
     })
     window.api.getAdapterStatus().then(setStatus)
+    window.api.listAgents().then(setAgents)
   }, [])
 
   const hasCredentials = (name: string, cfg: AdapterConfig): boolean => {
@@ -200,21 +280,15 @@ export default function AdapterSettings({ onClose }: Props) {
   ]
 
   return (
-    <div className="dialog-overlay" onClick={onClose}>
-      <div className="dialog adapter-dialog" onClick={e => e.stopPropagation()}>
+    <div className="settings-page">
+      <div className="settings-page-header">
+        <span className="settings-page-title">{t.settingsTitle}</span>
+      </div>
+      <div className="settings-page-inner">
         <div className="settings-tabs">
-          <button
-            className={`settings-tab ${tab === 'channels' ? 'active' : ''}`}
-            onClick={() => setTab('channels')}
-          >
-            {t.tabChannels}
-          </button>
-          <button
-            className={`settings-tab ${tab === 'notify' ? 'active' : ''}`}
-            onClick={() => setTab('notify')}
-          >
-            {t.tabNotify}
-          </button>
+          <button className={`settings-tab ${tab === 'channels' ? 'active' : ''}`} onClick={() => changeTab('channels')}>{t.tabChannels}</button>
+          <button className={`settings-tab ${tab === 'automation' ? 'active' : ''}`} onClick={() => changeTab('automation')}>{t.tabAutomation}</button>
+          <button className={`settings-tab ${tab === 'interface' ? 'active' : ''}`} onClick={() => changeTab('interface')}>{t.tabInterface}</button>
         </div>
 
         <div className="settings-tab-content">
@@ -283,46 +357,132 @@ export default function AdapterSettings({ onClose }: Props) {
           </>
         )}
 
-        {tab === 'notify' && (
-          <div className="notify-settings">
-            <div className="notify-row">
-              <label>{t.heartbeatInterval}</label>
-              <input
-                type="number"
-                min={1}
-                max={120}
-                value={notify.heartbeatMin}
-                onChange={e => setNotify(prev => ({ ...prev, heartbeatMin: Math.max(1, parseInt(e.target.value) || 10) }))}
-              />
-              <span>{t.minutes}</span>
+        {tab === 'automation' && (
+          <div className="agents-list">
+            {/* Detected agents */}
+            <div className="settings-section-card">
+              <div className="notify-section-title">{t.tabAgents}</div>
+              <div className="agents-header">
+                <span className="agents-hint">{t.agentsHint}</span>
+                <button className="btn-create" disabled={agentsLoading}
+                  onClick={async () => {
+                    setAgentsLoading(true)
+                    const result = await window.api.detectAgents()
+                    setAgents(result)
+                    setAgentsLoading(false)
+                    onAgentsRefresh?.()
+                  }}>
+                  {agentsLoading ? '...' : t.agentsRefresh}
+                </button>
+              </div>
+              {agents.map(a => (
+                <div key={a.type} className="agent-row">
+                  <span className="agent-icon" style={{ opacity: a.available ? 1 : 0.35 }}>{getAgentIcon(a.type, 16)}</span>
+                  <span className="agent-label">{a.label}</span>
+                  <code className="agent-cmd">{a.cmd}</code>
+                  <span className="agent-availability">{a.available ? t.agentInstalled : t.agentNotFound}</span>
+                </div>
+              ))}
             </div>
-            <div className="notify-row">
-              <label>{t.idleInterval}</label>
-              <input
-                type="number"
-                min={1}
-                max={120}
-                value={notify.idleMin}
-                onChange={e => setNotify(prev => ({ ...prev, idleMin: Math.max(1, parseInt(e.target.value) || 15) }))}
-              />
-              <span>{t.minutes}</span>
+
+            {/* AI Assist */}
+            <div className="settings-section-card">
+              <div className="notify-section-title">{t.aiAssistTitle}</div>
+              <div className="notify-row">
+                <ToggleSwitch checked={aiConfig.summaryEnabled} onChange={v => setAiConfig(prev => ({ ...prev, summaryEnabled: v }))} />
+                <label style={{ flex: 1 }}>{t.aiSummary}</label>
+              </div>
+              <p className="notify-hint" style={{ paddingLeft: 48 }}>{t.aiSummaryHint}</p>
+              <div className="notify-row">
+                <ToggleSwitch checked={aiConfig.chatEnabled} onChange={v => setAiConfig(prev => ({ ...prev, chatEnabled: v }))} />
+                <label style={{ flex: 1 }}>{t.aiChat}</label>
+              </div>
+              <p className="notify-hint" style={{ paddingLeft: 48 }}>{t.aiChatHint}</p>
+              <div className="notify-row">
+                <label>{t.aiAgent}</label>
+                <AgentSelect
+                  value={aiConfig.agent}
+                  onChange={v => setAiConfig(prev => ({ ...prev, agent: v }))}
+                  agents={agents}
+                />
+              </div>
             </div>
-            <p className="notify-hint">{t.notifyHint}</p>
-            <button
-              className="btn-create"
-              style={{ alignSelf: 'flex-end', marginTop: 4 }}
+
+            {/* Notification timing */}
+            <div className="settings-section-card">
+              <div className="notify-section-title">{t.tabNotify}</div>
+              <div className="notify-row">
+                <ToggleSwitch
+                  checked={notify.heartbeatEnabled}
+                  onChange={v => setNotify(prev => ({ ...prev, heartbeatEnabled: v }))}
+                />
+                <label style={{ flex: 1 }}>{t.heartbeatInterval}</label>
+                <div className="notify-input-group">
+                  <input type="number" min={1} max={120} value={notify.heartbeatMin}
+                    disabled={!notify.heartbeatEnabled}
+                    onChange={e => setNotify(prev => ({ ...prev, heartbeatMin: Math.max(1, parseInt(e.target.value) || 10) }))}
+                  />
+                  <span>{t.minutes}</span>
+                </div>
+              </div>
+              <div className="notify-row">
+                <ToggleSwitch
+                  checked={notify.idleEnabled}
+                  onChange={v => setNotify(prev => ({ ...prev, idleEnabled: v }))}
+                />
+                <label style={{ flex: 1 }}>{t.idleInterval}</label>
+                <div className="notify-input-group">
+                  <input type="number" min={1} max={120} value={notify.idleMin}
+                    disabled={!notify.idleEnabled}
+                    onChange={e => setNotify(prev => ({ ...prev, idleMin: Math.max(1, parseInt(e.target.value) || 15) }))}
+                  />
+                  <span>{t.minutes}</span>
+                </div>
+              </div>
+              <p className="notify-hint">{t.notifyHint}</p>
+            </div>
+
+            <button className="btn-create" style={{ alignSelf: 'flex-end' }} disabled={savingAi}
               onClick={async () => {
+                setSavingAi(true)
                 await window.api.saveAdapterConfig('_notify', notify as unknown as Record<string, unknown>)
-              }}
-            >
-              {t.saveConfig}
+                await window.api.saveAdapterConfig('_ai', aiConfig as unknown as Record<string, unknown>)
+                setSavingAi(false)
+              }}>
+              {savingAi ? t.saving : t.saveConfig}
             </button>
           </div>
         )}
-        </div>
 
-        <div className="dialog-actions">
-          <button className="btn-cancel" onClick={onClose}>{t.close}</button>
+        {tab === 'interface' && (
+          <div className="notify-settings">
+            <div className="notify-row">
+              <label>{t.langLabel}</label>
+              <button className="btn-create" onClick={toggleLang} style={{ padding: '4px 12px', fontSize: 12 }}>
+                {lang === 'zh' ? 'English' : '中文'}
+              </button>
+            </div>
+
+            <div className="notify-divider" />
+
+            <div className="shortcuts-list">
+              {([
+                ['Ctrl+Shift+R', t.shortcutRestart],
+                ['Ctrl+Tab', t.shortcutNextPane],
+                ['Ctrl+Shift+Tab', t.shortcutPrevPane],
+                ['Ctrl+W', t.shortcutClosePane],
+                ['Ctrl+C', t.shortcutCopy],
+                ['Right-click', t.shortcutPaste],
+                ['Double-click', t.shortcutRename],
+              ] as [string, string][]).map(([key, desc]) => (
+                <div key={key} className="shortcut-row">
+                  <kbd>{key}</kbd>
+                  <span>{desc}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         </div>
       </div>
     </div>

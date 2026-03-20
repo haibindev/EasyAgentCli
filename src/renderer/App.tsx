@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import type { PaneInfo, PaneType, BridgeStatus, LayoutMode, YoloLevel } from './types'
+import type { PaneInfo, PaneType, BridgeStatus, LayoutMode, YoloLevel, AgentInfo } from './types'
 import { useI18n } from './i18n-context'
+import { getAgentIcon, ShellIcon } from './components/AgentIcons'
 import Toolbar from './components/Toolbar'
+import Sidebar from './components/Sidebar'
 import StatusBar from './components/StatusBar'
 import TerminalPane from './components/TerminalPane'
 import NewPaneDialog from './components/NewPaneDialog'
@@ -35,6 +37,7 @@ export default function App() {
     visible: false, type: 'shell'
   })
   const [showSettings, setShowSettings] = useState(false)
+  const [agents, setAgents] = useState<AgentInfo[]>([])
 
   // Listen for pane list updates from main process
   useEffect(() => {
@@ -48,9 +51,21 @@ export default function App() {
     // Initial load
     window.api.listPanes().then(setPanes)
     window.api.getBridgeStatus().then(setBridgeStatus)
+    window.api.listAgents().then(setAgents)
 
     return () => { unsub(); unsubBridge() }
   }, [])
+
+  // Auto-correct activePane when panes change (safety net for close race conditions)
+  useEffect(() => {
+    if (panes.length === 0) {
+      if (activePane !== null) setActivePane(null)
+      return
+    }
+    if (activePane && !panes.find(p => p.id === activePane)) {
+      setActivePane(panes[0].id)
+    }
+  }, [panes, activePane])
 
   const handleSetLayout = useCallback((mode: LayoutMode) => {
     setLayout(mode)
@@ -61,13 +76,14 @@ export default function App() {
     setDialog({ visible: true, type })
   }, [])
 
-  const handleCreatePane = useCallback(async (cwd: string, shellVariant?: string, bypassPermissions?: boolean) => {
+  const handleCreatePane = useCallback(async (cwd: string, shellVariant?: string, bypassPermissions?: boolean, extraArgs?: string[]) => {
     const type = dialog.type
     setDialog({ visible: false, type: 'shell' })
     const pane = await window.api.createPane(
       shellVariant && type === 'shell' ? `shell:${shellVariant}` : type,
       cwd,
-      bypassPermissions
+      bypassPermissions,
+      extraArgs
     )
     setActivePane(pane.id)
   }, [dialog.type])
@@ -78,13 +94,16 @@ export default function App() {
       const ok = window.confirm(t.confirmClose(pane.title))
       if (!ok) return
     }
-    await window.api.closePane(id)
+    // Pre-emptively switch active pane before async close to avoid stale state
     if (activePane === id) {
       const idx = panes.findIndex(p => p.id === id)
       const next = panes[idx + 1] || panes[idx - 1]
       setActivePane(next?.id ?? null)
     }
-  }, [activePane, panes])
+    await window.api.closePane(id)
+    // Force remaining terminals to refresh (prevents WebGL black screen)
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 100)
+  }, [activePane, panes, t])
 
   const handleRestartPane = useCallback(async (id: string) => {
     await window.api.restartPane(id)
@@ -107,16 +126,10 @@ export default function App() {
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey) {
-        switch (e.key) {
-          case 'C': e.preventDefault(); handleAddPane('claude'); return
-          case 'X': e.preventDefault(); handleAddPane('codex'); return
-          case 'S': e.preventDefault(); handleAddPane('shell'); return
-          case 'R':
-            e.preventDefault()
-            if (activePane) handleRestartPane(activePane)
-            return
-        }
+      if (e.ctrlKey && e.shiftKey && e.key === 'R') {
+        e.preventDefault()
+        if (activePane) handleRestartPane(activePane)
+        return
       }
       if (e.ctrlKey && e.key === 'Tab' && panes.length > 1) {
         e.preventDefault()
@@ -134,74 +147,93 @@ export default function App() {
     }
     window.addEventListener('keydown', handler, true)
     return () => window.removeEventListener('keydown', handler, true)
-  }, [handleAddPane, handleRestartPane, handleClosePane, activePane, panes])
+  }, [handleRestartPane, handleClosePane, activePane, panes])
 
-  // Build grid: rows x cols, fill with panes, handle overflow/underflow
+  // Explicit display order — the single source of truth for sidebar + grid layout.
+  // New panes append to the end; closed panes are removed; drag-to-reorder updates this.
+  const [paneOrder, setPaneOrder] = useState<string[]>([])
+
+  useEffect(() => {
+    setPaneOrder(prev => {
+      const existing = new Set(panes.map(p => p.id))
+      const filtered = prev.filter(id => existing.has(id))
+      const added = panes.map(p => p.id).filter(id => !prev.includes(id))
+      return [...filtered, ...added]
+    })
+  }, [panes])
+
+  const handleReorder = useCallback((newOrder: string[]) => {
+    setPaneOrder(newOrder)
+  }, [])
+
+  // Panes in user-defined display order
+  const orderedPanes = useMemo(
+    () => paneOrder.map(id => panes.find(p => p.id === id)).filter((p): p is PaneInfo => !!p),
+    [paneOrder, panes]
+  )
+
+  // Grid: fill rows × cols cells in order, overflow rows scroll
+  const { rows, cols } = layout
+  const actualRows = Math.max(rows, Math.ceil(orderedPanes.length / cols))
   const grid = useMemo(() => {
-    const { rows, cols } = layout
-    const capacity = rows * cols
-    // Actual rows needed: if panes > capacity, add extra rows
-    const actualRows = panes.length > capacity
-      ? Math.ceil(panes.length / cols)
-      : rows
     const result: (PaneInfo | null)[][] = []
     for (let r = 0; r < actualRows; r++) {
       const row: (PaneInfo | null)[] = []
       for (let c = 0; c < cols; c++) {
-        const idx = r * cols + c
-        row.push(idx < panes.length ? panes[idx] : null)
+        row.push(orderedPanes[r * cols + c] ?? null)
       }
       result.push(row)
     }
     return result
-  }, [layout, panes])
+  }, [orderedPanes, actualRows, cols])
 
-  const renderPane = (pane: PaneInfo) => (
-    <ErrorBoundary>
-      <TerminalPane
-        pane={pane}
-        active={activePane === pane.id}
-        onActivate={() => setActivePane(pane.id)}
-        onClose={() => handleClosePane(pane.id)}
-        onRestart={() => handleRestartPane(pane.id)}
-        onYoloChange={(level) => handleYoloChange(pane.id, level)}
-        onRename={(title) => handleRenamePane(pane.id, title)}
-      />
-    </ErrorBoundary>
-  )
+  const renderPane = (pane: PaneInfo) => {
+    const idx = orderedPanes.findIndex(p => p.id === pane.id) + 1
+    return (
+      <ErrorBoundary>
+        <TerminalPane
+          pane={pane}
+          paneIndex={idx}
+          active={activePane === pane.id}
+          onActivate={() => setActivePane(pane.id)}
+          onClose={() => handleClosePane(pane.id)}
+          onRestart={() => handleRestartPane(pane.id)}
+          onYoloChange={(level) => handleYoloChange(pane.id, level)}
+          onRename={(title) => handleRenamePane(pane.id, title)}
+        />
+      </ErrorBoundary>
+    )
+  }
 
   const renderEmptySlot = (key: string) => (
     <div className="empty-slot" key={key}>
       <div className="empty-slot-inner">
         <span className="empty-slot-hint">{t.emptySlot}</span>
         <div className="empty-slot-btns">
-          <button className="empty-slot-btn" onClick={() => handleAddPane('claude')}>
-            <span style={{ color: 'var(--accent-claude)' }}>●</span> Claude
-          </button>
-          <button className="empty-slot-btn" onClick={() => handleAddPane('codex')}>
-            <span style={{ color: 'var(--accent-codex)' }}>●</span> Codex
-          </button>
+          {agents.filter(a => a.available).map(a => (
+            <button key={a.type} className="empty-slot-btn" onClick={() => handleAddPane(a.type)}>
+              {getAgentIcon(a.type, 15)} {a.label}
+            </button>
+          ))}
           <button className="empty-slot-btn" onClick={() => handleAddPane('shell')}>
-            <span style={{ color: 'var(--accent-shell)' }}>●</span> Shell
+            <ShellIcon size={15} /> Shell
           </button>
         </div>
       </div>
     </div>
   )
 
-  const isOverflow = panes.length > layout.rows * layout.cols
-  const actualRows = grid.length
-  const { cols } = layout
-
-  // CSS Grid style — equal-sized cells
+  // Scrollable overflow: fix row height to 1/layout.rows of the container.
+  // When actualRows > layout.rows, the grid exceeds 100% height and the
+  // pane-area scrolls to reveal the extra rows.
   const gridStyle: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: `repeat(${cols}, 1fr)`,
     gridTemplateRows: `repeat(${actualRows}, 1fr)`,
     gap: '2px',
-    height: '100%',
     width: '100%',
-    background: 'var(--border)' // gap color
+    height: actualRows > rows ? `${(actualRows / rows) * 100}%` : '100%',
+    background: 'var(--border)',
   }
 
   return (
@@ -209,57 +241,72 @@ export default function App() {
       <Toolbar
         leaveMode={leaveMode}
         layout={layout}
-        overflowHint={isOverflow ? t.overflowHint(layout.rows, layout.cols) : undefined}
+        agents={agents}
         onAddPane={handleAddPane}
         onToggleLeaveMode={handleToggleLeaveMode}
         onSetLayout={handleSetLayout}
-        onOpenSettings={() => setShowSettings(true)}
       />
 
-      <div className="pane-area">
-        {panes.length === 0 ? (
-          <div className="empty-state">
-            <h2>EasyAgentCli</h2>
-            <p>{t.appSubtitle}</p>
-            <div className="quick-btns">
-              <button className="quick-btn" onClick={() => handleAddPane('claude')}>
-                <span style={{ color: 'var(--accent-claude)', fontSize: 20 }}>●</span>
-                Claude Code
-                <span className="label">Ctrl+Shift+C</span>
-              </button>
-              <button className="quick-btn" onClick={() => handleAddPane('codex')}>
-                <span style={{ color: 'var(--accent-codex)', fontSize: 20 }}>●</span>
-                Codex
-                <span className="label">Ctrl+Shift+X</span>
-              </button>
-              <button className="quick-btn" onClick={() => handleAddPane('shell')}>
-                <span style={{ color: 'var(--accent-shell)', fontSize: 20 }}>●</span>
-                Shell
-                <span className="label">Ctrl+Shift+S</span>
-              </button>
+      <div className="main-body">
+        <Sidebar
+          panes={orderedPanes}
+          activePane={activePane}
+          agents={agents}
+          onActivate={(id) => { setActivePane(id); setShowSettings(false) }}
+          onAddPane={handleAddPane}
+          onReorder={handleReorder}
+          settingsOpen={showSettings}
+          onSetSettingsOpen={setShowSettings}
+        />
+        <div className="pane-area">
+          {/* Terminal grid — always mounted so xterm stays alive */}
+          {panes.length === 0 ? (
+            <div className="empty-state">
+              <h2>EasyAgentCli</h2>
+              <p>{t.appSubtitle}</p>
+              <div className="quick-btns">
+                {agents.filter(a => a.available).map(a => (
+                  <button key={a.type} className="quick-btn" onClick={() => handleAddPane(a.type)}>
+                    {getAgentIcon(a.type, 22)}
+                    {a.label}
+                  </button>
+                ))}
+                <button className="quick-btn" onClick={() => handleAddPane('shell')}>
+                  <ShellIcon size={22} />
+                  Shell
+                </button>
+              </div>
             </div>
-          </div>
-        ) : (
-          <div style={gridStyle}>
-            {grid.flat().map((cell, idx) =>
-              cell ? (
-                <div key={cell.id} className="grid-cell">
-                  {renderPane(cell)}
-                </div>
-              ) : (
-                renderEmptySlot(`empty-${idx}`)
-              )
-            )}
-          </div>
-        )}
+          ) : (
+            <div style={gridStyle}>
+              {grid.flat().map((cell, idx) =>
+                cell ? (
+                  <div key={cell.id} className="grid-cell">
+                    {renderPane(cell)}
+                  </div>
+                ) : (
+                  renderEmptySlot(`empty-${idx}`)
+                )
+              )}
+            </div>
+          )}
+
+          {/* Settings overlay — floats above grid without unmounting terminals */}
+          {showSettings && (
+            <div className="settings-overlay">
+              <AdapterSettings
+                onClose={() => setShowSettings(false)}
+                onAgentsRefresh={() => window.api.listAgents().then(setAgents)}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       <StatusBar
         panes={panes}
         bridgeStatus={bridgeStatus}
         leaveMode={leaveMode}
-        activePane={activePane}
-        onActivatePane={setActivePane}
       />
 
       {dialog.visible && (
@@ -270,9 +317,6 @@ export default function App() {
         />
       )}
 
-      {showSettings && (
-        <AdapterSettings onClose={() => setShowSettings(false)} />
-      )}
     </div>
   )
 }

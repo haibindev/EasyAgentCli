@@ -1,25 +1,19 @@
-import type { PaneType, LayoutMode } from '../types'
+import type { PaneType, LayoutMode, AgentInfo } from '../types'
 import { LAYOUT_PRESETS } from '../types'
 import { useI18n } from '../i18n-context'
-
-const TYPE_COLORS: Record<PaneType, string> = {
-  claude: 'var(--accent-claude)',
-  codex: 'var(--accent-codex)',
-  shell: 'var(--accent-shell)'
-}
+import { getAgentIcon, ShellIcon } from './AgentIcons'
 
 interface Props {
   leaveMode: boolean
   layout: LayoutMode
-  overflowHint?: string
+  agents: AgentInfo[]
   onAddPane: (type: PaneType) => void
   onToggleLeaveMode: () => void
   onSetLayout: (mode: LayoutMode) => void
-  onOpenSettings: () => void
 }
 
-export default function Toolbar({ leaveMode, layout, overflowHint, onAddPane, onToggleLeaveMode, onSetLayout, onOpenSettings }: Props) {
-  const { lang, t, toggleLang } = useI18n()
+export default function Toolbar({ leaveMode, layout, agents, onAddPane, onToggleLeaveMode, onSetLayout }: Props) {
+  const { t } = useI18n()
   const currentLabel = `${layout.rows}×${layout.cols}`
 
   const handleLayoutChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -27,23 +21,26 @@ export default function Toolbar({ leaveMode, layout, overflowHint, onAddPane, on
     if (preset) onSetLayout(preset.mode)
   }
 
+  const visibleAgents = agents.filter(a => a.available)
+
   return (
     <div className="toolbar">
       <div className="toolbar-left">
-        {(['claude', 'codex', 'shell'] as PaneType[]).map(type => (
-          <button key={type} className="toolbar-btn" onClick={() => onAddPane(type)}>
-            <span className="dot" style={{ background: TYPE_COLORS[type] }} />
-            + {type.charAt(0).toUpperCase() + type.slice(1)}
+        {visibleAgents.map(agent => (
+          <button key={agent.type} className="toolbar-btn" onClick={() => onAddPane(agent.type)}>
+            {getAgentIcon(agent.type, 14)}
+            + {agent.label}
           </button>
         ))}
+        <button className="toolbar-btn" onClick={() => onAddPane('shell')}>
+          <ShellIcon size={14} />
+          + Shell
+        </button>
       </div>
 
       <div className="toolbar-center">
         {leaveMode && (
           <span className="toolbar-hint toolbar-hint-leave">{t.leaveModeHint}</span>
-        )}
-        {overflowHint && (
-          <span className="toolbar-hint toolbar-hint-overflow">{overflowHint}</span>
         )}
       </div>
 
@@ -62,17 +59,11 @@ export default function Toolbar({ leaveMode, layout, overflowHint, onAddPane, on
             ))}
           </select>
         </div>
-        <button className="toolbar-btn" onClick={onOpenSettings} title={t.settingsTitle}>
-          ⚙
-        </button>
         <button
           className={`toolbar-btn ${leaveMode ? 'active' : ''}`}
           onClick={onToggleLeaveMode}
         >
           {leaveMode ? t.leaveModeActive : t.leaveModeInactive}
-        </button>
-        <button className="toolbar-btn lang-btn" onClick={toggleLang} title="中文 / English">
-          {lang === 'zh' ? 'EN' : '中'}
         </button>
       </div>
     </div>

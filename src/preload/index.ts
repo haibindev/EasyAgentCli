@@ -2,8 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 contextBridge.exposeInMainWorld('api', {
   // Pane management
-  createPane: (type: string, cwd: string, bypassPermissions?: boolean) =>
-    ipcRenderer.invoke('pane:create', { type, cwd, bypassPermissions }),
+  createPane: (type: string, cwd: string, bypassPermissions?: boolean, extraArgs?: string[]) =>
+    ipcRenderer.invoke('pane:create', { type, cwd, bypassPermissions, extraArgs }),
 
   closePane: (id: string) =>
     ipcRenderer.invoke('pane:close', id),
@@ -43,6 +43,13 @@ contextBridge.exposeInMainWorld('api', {
   getAdapterStatus: () =>
     ipcRenderer.invoke('adapter:getStatus'),
 
+  // Agent detection
+  detectAgents: () =>
+    ipcRenderer.invoke('agents:detect'),
+
+  listAgents: () =>
+    ipcRenderer.invoke('agents:list'),
+
   // File dialog
   selectDirectory: () =>
     ipcRenderer.invoke('dialog:selectDir'),
@@ -78,8 +85,8 @@ contextBridge.exposeInMainWorld('api', {
     return () => { ipcRenderer.removeListener('pane:listUpdate', handler) }
   },
 
-  onBridgeStatus: (cb: (status: { serverRunning: boolean; clientCount: number; leaveMode: boolean }) => void) => {
-    const handler = (_: Electron.IpcRendererEvent, status: { serverRunning: boolean; clientCount: number; leaveMode: boolean }): void => cb(status)
+  onBridgeStatus: (cb: (status: { serverRunning: boolean; clientCount: number; leaveMode: boolean; adapters?: Record<string, boolean> }) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, status: { serverRunning: boolean; clientCount: number; leaveMode: boolean; adapters?: Record<string, boolean> }): void => cb(status)
     ipcRenderer.on('bridge:status', handler)
     return () => { ipcRenderer.removeListener('bridge:status', handler) }
   }

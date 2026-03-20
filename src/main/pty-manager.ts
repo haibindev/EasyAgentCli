@@ -1,12 +1,12 @@
 import { EventEmitter } from 'events'
 import { randomUUID } from 'crypto'
-import { readFileSync } from 'fs'
+import { readFileSync, readdirSync, statSync } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
 import * as pty from 'node-pty'
-import { Analyzer, type AnalyzerEvent } from './bridge/analyzer'
+import { Analyzer, cleanTerminalOutput, extractLineContent, type AnalyzerEvent } from './bridge/analyzer'
 
-export type PaneType = 'claude' | 'codex' | 'shell'
+export type PaneType = string   // dynamic: 'claude' | 'codex' | 'gemini' | 'aider' | 'shell'
 export type YoloLevel = 'off' | 'safe' | 'full'
 export type PaneStatus = 'running' | 'idle' | 'confirm' | 'done' | 'error'
 
@@ -23,7 +23,11 @@ export interface PaneInfo {
 
 export interface CreatePaneOpts {
   resumeSessionId?: string
+  /** Use --continue to resume most recent conversation (session restore fallback) */
+  continueSession?: boolean
   bypassPermissions?: boolean
+  /** Extra CLI flags to pass verbatim when spawning/restarting the agent */
+  extraArgs?: string[]
 }
 
 /** Circular buffer — O(1) push, O(1) trim, no array copies */
@@ -66,12 +70,20 @@ interface PaneInternal extends PaneInfo {
   heartbeatTimer: ReturnType<typeof setInterval> | null
   lastOutputTime: number  // track active vs quiet
   sessionId: string | null
+  /** Lines seen during the startup chrome recording window (banner/headers/UI) */
+  chromeLines: Set<string>
+  /** Record output as chrome until this timestamp (0 = not recording) */
+  chromeRecordUntil: number
+  /** Extra CLI flags preserved through restart and session restore */
+  extraArgs: string[]
 }
 
 const RISK_HIGH = /rm\s+-|drop\s+|git\s+push|sudo|format|truncate|delete/i
 const RISK_MED = /bash|shell|execute|run\s+command/i
 let QUIET_THRESHOLD = 15 * 60 * 1000   // 15 min — idle notification (configurable)
 let HEARTBEAT_INTERVAL = 10 * 60 * 1000 // 10 min — progress heartbeat (configurable)
+let HEARTBEAT_ENABLED = true
+let QUIET_ENABLED = true
 
 // Remove env vars that prevent Claude Code from launching inside our PTY
 function cleanEnv(): Record<string, string> {
@@ -106,15 +118,15 @@ export class PtyManager extends EventEmitter {
     const num = this.nextId
     const displayName = shellVariant || type
     const id = `pane-${num}`
-    const title = `${displayName} #${num}`
+    const title = displayName
 
     const bypass = opts?.bypassPermissions ?? false
 
     // For agent panes: track session ID for resume on restart
+    // Claude: --resume <id> (captured from ~/.claude/projects/)
+    // Codex: codex resume <id> (captured from session_index.jsonl)
     let sessionId: string | null = null
-    if (type === 'claude') {
-      sessionId = opts?.resumeSessionId ?? randomUUID()
-    } else if (type === 'codex' && opts?.resumeSessionId) {
+    if ((type === 'claude' || type === 'codex') && opts?.resumeSessionId) {
       sessionId = opts.resumeSessionId
     }
 
@@ -124,7 +136,12 @@ export class PtyManager extends EventEmitter {
       codexIndexLinesBefore = this.countCodexSessions()
     }
 
-    const { cmd, args } = this.resolveCmd(type, shellVariant, sessionId, !!opts?.resumeSessionId, bypass)
+    // Record spawn time so we can find session files created AFTER this moment
+    const spawnTime = Date.now()
+
+    const continueSession = !sessionId && (opts?.continueSession ?? false)
+    const extraArgs = opts?.extraArgs ?? []
+    const { cmd, args } = this.resolveCmd(type, shellVariant, sessionId, !!opts?.resumeSessionId, continueSession, bypass, extraArgs)
 
     let p: pty.IPty
     try {
@@ -140,6 +157,11 @@ export class PtyManager extends EventEmitter {
       })
     }
 
+    // Record startup chrome only for fresh agent panes (not restore/continue).
+    // Resume/continue panes replay session history which is NOT chrome.
+    const isAgentFresh = (type === 'claude' || type === 'codex')
+      && !opts?.resumeSessionId && !opts?.continueSession
+
     const pane: PaneInternal = {
       id, title, type, cwd,
       status: 'running',
@@ -153,7 +175,10 @@ export class PtyManager extends EventEmitter {
       quietTimerDirty: false,
       heartbeatTimer: null,
       lastOutputTime: Date.now(),
-      sessionId
+      sessionId,
+      chromeLines: new Set(),
+      chromeRecordUntil: isAgentFresh ? Date.now() + 7000 : 0,
+      extraArgs,
     }
 
     this.panes.set(id, pane)
@@ -163,6 +188,11 @@ export class PtyManager extends EventEmitter {
     // For Codex fresh start: detect the new session ID after Codex creates it
     if (type === 'codex' && !opts?.resumeSessionId) {
       this.captureCodexSessionId(pane, codexIndexLinesBefore)
+    }
+
+    // For Claude fresh start: detect the new session ID by file creation time
+    if (type === 'claude' && !opts?.resumeSessionId) {
+      this.captureClaudeSessionId(pane, spawnTime)
     }
 
     this.emitListUpdate()
@@ -180,9 +210,9 @@ export class PtyManager extends EventEmitter {
     if (pane.heartbeatTimer) clearInterval(pane.heartbeatTimer)
     try { pane.pty.kill() } catch { /* ignore */ }
 
-    // On in-app restart: use --continue (safe fallback) instead of --resume <uuid>
-    // which fails with "No conversation found" if the session was never created
-    const { cmd, args } = this.resolveCmd(pane.type, pane.shellVariant, pane.sessionId, false, pane.bypassPermissions)
+    // On in-app restart: use --resume <id> if we have a session ID, else --continue
+    // Restart: use --resume if we have session ID, else --continue (not fresh)
+    const { cmd, args } = this.resolveCmd(pane.type, pane.shellVariant, pane.sessionId, !!pane.sessionId, !pane.sessionId, pane.bypassPermissions, pane.extraArgs)
     let p: pty.IPty
     try {
       p = pty.spawn(cmd, args, {
@@ -205,6 +235,7 @@ export class PtyManager extends EventEmitter {
     this.emit('pane:clear', { id })
     this.attachPtyHandlers(pane, p, gen)
     this.startHeartbeat(pane)
+
     this.emitListUpdate()
     return this.toInfo(pane)
   }
@@ -251,16 +282,19 @@ export class PtyManager extends EventEmitter {
     return Array.from(this.panes.values()).map(p => this.toInfo(p))
   }
 
-  /** Update notification intervals (in minutes) and restart timers */
-  setNotifyIntervals(heartbeatMin: number, idleMin: number): void {
+  /** Update notification intervals/enabled flags and restart timers */
+  setNotifyIntervals(heartbeatMin: number, heartbeatEnabled: boolean, idleMin: number, idleEnabled: boolean): void {
     HEARTBEAT_INTERVAL = heartbeatMin * 60 * 1000
     QUIET_THRESHOLD = idleMin * 60 * 1000
-    // Restart timers on all running panes
+    HEARTBEAT_ENABLED = heartbeatEnabled
+    QUIET_ENABLED = idleEnabled
+    // Restart (or stop) timers on all running panes
     for (const pane of this.panes.values()) {
       if (pane.status === 'running') {
-        if (pane.heartbeatTimer) clearInterval(pane.heartbeatTimer)
-        this.startHeartbeat(pane)
-        this.resetQuietTimer(pane)
+        if (pane.heartbeatTimer) { clearInterval(pane.heartbeatTimer); pane.heartbeatTimer = null }
+        if (pane.quietTimer) { clearTimeout(pane.quietTimer); pane.quietTimer = null }
+        if (HEARTBEAT_ENABLED) this.startHeartbeat(pane)
+        if (QUIET_ENABLED) this.resetQuietTimer(pane)
       }
     }
   }
@@ -281,15 +315,27 @@ export class PtyManager extends EventEmitter {
 
       // Strip ANSI and push lines into circular buffer — O(1) per line, no splice/shift
       const stripped = stripAnsi(data)
+      const recordingChrome = pane.chromeRecordUntil > 0 && Date.now() < pane.chromeRecordUntil
       let start = 0
       for (let i = 0; i < stripped.length; i++) {
         if (stripped.charCodeAt(i) === 10) { // '\n'
-          pane.ring.push(stripped.substring(start, i))
+          const line = stripped.substring(start, i)
+          pane.ring.push(line)
+          // Record startup chrome fingerprint: content extracted from each line
+          if (recordingChrome) {
+            const content = extractLineContent(line)
+            if (content.length >= 4) pane.chromeLines.add(content)
+          }
           start = i + 1
         }
       }
       if (start < stripped.length) {
-        pane.ring.push(stripped.substring(start))
+        const line = stripped.substring(start)
+        pane.ring.push(line)
+        if (recordingChrome) {
+          const content = extractLineContent(line)
+          if (content.length >= 4) pane.chromeLines.add(content)
+        }
       }
 
       pane.lastOutputTime = Date.now()
@@ -304,7 +350,7 @@ export class PtyManager extends EventEmitter {
       }
 
       // Analyzer only runs regex on the current chunk, not the whole ring
-      const event = this.analyzer.feed(pane.ring, stripped)
+      const event = this.analyzer.feed(pane.ring, stripped, pane.chromeLines)
       if (event) this.handleEvent(pane, event, stripped)
     })
 
@@ -322,11 +368,12 @@ export class PtyManager extends EventEmitter {
 
   /** Periodic heartbeat: emit progress summary if pane is actively producing output */
   private startHeartbeat(pane: PaneInternal): void {
+    if (!HEARTBEAT_ENABLED) return
     pane.heartbeatTimer = setInterval(() => {
       // Only send heartbeat if pane has had output recently (active, not idle)
       const sinceLastOutput = Date.now() - pane.lastOutputTime
       if (sinceLastOutput < HEARTBEAT_INTERVAL && pane.status === 'running') {
-        const summary = pane.ring.last(5).join('\n').trim()
+        const summary = cleanTerminalOutput(pane.ring.last(5).join('\n'), pane.chromeLines)
         if (summary) {
           this.emit('pane:event', {
             id: pane.id,
@@ -351,22 +398,26 @@ export class PtyManager extends EventEmitter {
     shellVariant: string,
     sessionId?: string | null,
     isResume?: boolean,
-    bypass?: boolean
+    isContinue?: boolean,
+    bypass?: boolean,
+    extraArgs?: string[]
   ): { cmd: string; args: string[] } {
     const isWin = process.platform === 'win32'
+    const extra = extraArgs ?? []
     switch (type) {
       case 'claude': {
-        const claudeArgs: string[] = []
+        // --resume <id>: exact session restore
+        // --continue: resume most recent (session restore fallback / restart)
+        // (none): fresh new conversation
+        const claudeArgs: string[] = sessionId && isResume
+          ? ['--resume', sessionId]
+          : isContinue
+            ? ['--continue']
+            : []
         if (bypass) {
           claudeArgs.push('--dangerously-skip-permissions')
         }
-        if (isResume && sessionId) {
-          // App-level session restore: resume specific session
-          claudeArgs.push('--resume', sessionId)
-        } else if (sessionId) {
-          // Fresh start or in-app restart: use --continue to pick up where left off
-          claudeArgs.push('--continue')
-        }
+        claudeArgs.push(...extra)
         if (isWin) {
           return { cmd: 'cmd.exe', args: ['/c', 'claude', ...claudeArgs] }
         }
@@ -374,7 +425,7 @@ export class PtyManager extends EventEmitter {
       }
       case 'codex': {
         if (sessionId && isResume) {
-          const codexArgs = ['resume', sessionId]
+          const codexArgs = ['resume', sessionId, ...extra]
           if (isWin) {
             return { cmd: 'cmd.exe', args: ['/c', 'codex', ...codexArgs] }
           }
@@ -384,6 +435,7 @@ export class PtyManager extends EventEmitter {
         if (bypass) {
           codexArgs.push('--dangerously-bypass-approvals-and-sandbox')
         }
+        codexArgs.push(...extra)
         if (isWin) {
           return { cmd: 'cmd.exe', args: ['/c', 'codex', ...codexArgs] }
         }
@@ -391,6 +443,34 @@ export class PtyManager extends EventEmitter {
       }
       case 'shell':
         return this.resolveShell(shellVariant, isWin)
+      case 'gemini': {
+        const geminiArgs: string[] = []
+        if (bypass) geminiArgs.push('--yolo')
+        geminiArgs.push(...extra)
+        if (isWin) return { cmd: 'cmd.exe', args: ['/c', 'gemini', ...geminiArgs] }
+        return { cmd: 'gemini', args: geminiArgs }
+      }
+      case 'kimi': {
+        const kimiArgs: string[] = []
+        if (bypass) kimiArgs.push('--yolo')
+        kimiArgs.push(...extra)
+        if (isWin) return { cmd: 'cmd.exe', args: ['/c', 'kimi', ...kimiArgs] }
+        return { cmd: 'kimi', args: kimiArgs }
+      }
+      case 'aider': {
+        const aiderArgs: string[] = []
+        if (bypass) aiderArgs.push('--yes')
+        aiderArgs.push(...extra)
+        if (isWin) return { cmd: 'cmd.exe', args: ['/c', 'aider', ...aiderArgs] }
+        return { cmd: 'aider', args: aiderArgs }
+      }
+      default: {
+        // Generic agent CLI (aider, etc.)
+        if (isWin) {
+          return { cmd: 'cmd.exe', args: ['/c', type, ...extra] }
+        }
+        return { cmd: type, args: [...extra] }
+      }
     }
   }
 
@@ -436,6 +516,138 @@ export class PtyManager extends EventEmitter {
     }
 
     setTimeout(check, 2000)
+  }
+
+  /** Claude Code project directory base */
+  private get claudeProjectsDir(): string {
+    return join(homedir(), '.claude', 'projects')
+  }
+
+  /**
+   * Convert a CWD path to Claude Code's project directory name.
+   * Claude encodes: `:`, `\`, `/` → `-`; non-ASCII chars → `-`
+   * e.g. `D:\prjs\open\EasyAgentCli` → `D--prjs-open-EasyAgentCli`
+   */
+  private cwdToClaudeProjectDir(cwd: string): string {
+    const trimmed = cwd.replace(/[\\/]+$/, '') // strip trailing separators
+    return trimmed.replace(/[:\\/]/g, '-').replace(/[^\x20-\x7E]/g, '-')
+  }
+
+  /**
+   * Find a .jsonl session file whose creation time (birthtimeMs) is after spawnTime.
+   * Returns the newest such file, or null if none found.
+   * Using birthtimeMs avoids the race condition where another Claude instance
+   * keeps updating an EXISTING session file's mtime after our spawn.
+   */
+  private findSessionCreatedAfter(dir: string, spawnTime: number): { id: string } | null {
+    try {
+      const entries = readdirSync(dir)
+      let newest: { id: string; birthtimeMs: number } | null = null
+      for (const entry of entries) {
+        if (!entry.endsWith('.jsonl')) continue
+        try {
+          const st = statSync(join(dir, entry))
+          // birthtimeMs = file creation time (reliable on Windows/NTFS)
+          if (st.birthtimeMs > spawnTime) {
+            if (!newest || st.birthtimeMs > newest.birthtimeMs) {
+              newest = { id: entry.replace('.jsonl', ''), birthtimeMs: st.birthtimeMs }
+            }
+          }
+        } catch { /* skip */ }
+      }
+      return newest ? { id: newest.id } : null
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * After Claude starts, poll for a new session file created after spawnTime.
+   *
+   * Strategy:
+   * 1. Check the CWD-specific project directory first (fast path).
+   * 2. If not found after maxAttempts, do a global scan of ALL project
+   *    directories — this handles cases where our path encoding doesn't
+   *    exactly match what Claude used.
+   *
+   * Using file creation time (birthtimeMs) instead of mtime ensures we
+   * never mistake an existing session (from Windows Terminal or other
+   * Claude instances) for the one we just spawned.
+   */
+  private captureClaudeSessionId(pane: PaneInternal, spawnTime: number): void {
+    const dirName = this.cwdToClaudeProjectDir(pane.cwd)
+    const projectDir = join(this.claudeProjectsDir, dirName)
+    let attempts = 0
+    const maxAttempts = 30
+
+    const check = (): void => {
+      attempts++
+      if (!this.panes.has(pane.id)) return
+
+      const found = this.findSessionCreatedAfter(projectDir, spawnTime)
+      if (found) {
+        pane.sessionId = found.id
+        console.log(`[PTY] Captured Claude session ID for ${pane.id}: ${found.id}`)
+        return
+      }
+
+      if (attempts < maxAttempts) {
+        setTimeout(check, 1500)
+      } else {
+        // Fallback: scan ALL project directories in case our path encoding
+        // doesn't match Claude's (e.g. different slash/case handling)
+        console.log(`[PTY] CWD-specific lookup failed for ${pane.id}, trying global scan`)
+        this.captureClaudeSessionIdGlobal(pane, spawnTime)
+      }
+    }
+
+    // Give Claude a few seconds to initialise and create the session file
+    setTimeout(check, 3000)
+  }
+
+  /** Global fallback: scan all ~/.claude/projects/ subdirs for a new session */
+  private captureClaudeSessionIdGlobal(pane: PaneInternal, spawnTime: number): void {
+    const projectsDir = this.claudeProjectsDir
+    let attempts = 0
+    const maxAttempts = 10
+
+    const check = (): void => {
+      attempts++
+      if (!this.panes.has(pane.id)) return
+
+      try {
+        const projects = readdirSync(projectsDir)
+        let newest: { id: string; birthtimeMs: number } | null = null
+        for (const proj of projects) {
+          const projDir = join(projectsDir, proj)
+          try {
+            const entries = readdirSync(projDir)
+            for (const entry of entries) {
+              if (!entry.endsWith('.jsonl')) continue
+              try {
+                const st = statSync(join(projDir, entry))
+                if (st.birthtimeMs > spawnTime) {
+                  if (!newest || st.birthtimeMs > newest.birthtimeMs) {
+                    newest = { id: entry.replace('.jsonl', ''), birthtimeMs: st.birthtimeMs }
+                  }
+                }
+              } catch { /* skip */ }
+            }
+          } catch { /* skip */ }
+        }
+        if (newest) {
+          pane.sessionId = newest.id
+          console.log(`[PTY] Captured Claude session ID for ${pane.id} (global): ${newest.id}`)
+          return
+        }
+      } catch { /* ignore */ }
+
+      if (attempts < maxAttempts) {
+        setTimeout(check, 2000)
+      }
+    }
+
+    check()
   }
 
   private resolveShell(variant: string, isWin: boolean): { cmd: string; args: string[] } {
@@ -488,9 +700,15 @@ export class PtyManager extends EventEmitter {
 
   private resetQuietTimer(pane: PaneInternal): void {
     if (pane.quietTimer) clearTimeout(pane.quietTimer)
+    if (!QUIET_ENABLED) return
     pane.quietTimer = setTimeout(() => {
       const mins = Math.round(QUIET_THRESHOLD / 60000)
-      pane.lastEvent = { type: 'idle', content: `已静默 ${mins} 分钟`, time: Date.now() }
+      // Include the last ~15 filtered lines so the user can see what was happening
+      const lastOutput = cleanTerminalOutput(pane.ring.last(15).join('\n'), pane.chromeLines)
+      const content = lastOutput
+        ? `已静默 ${mins} 分钟\n\n最后输出:\n${lastOutput}`
+        : `已静默 ${mins} 分钟`
+      pane.lastEvent = { type: 'idle', content, time: Date.now() }
       this.emit('pane:event', { id: pane.id, event: pane.lastEvent })
     }, QUIET_THRESHOLD)
   }
@@ -499,13 +717,15 @@ export class PtyManager extends EventEmitter {
     this.emit('pane:listUpdate', this.list())
   }
 
-  getSessionConfig(): Array<{ type: string; cwd: string; yoloLevel: string; sessionId?: string; bypassPermissions?: boolean }> {
+  getSessionConfig(): Array<{ type: string; cwd: string; yoloLevel: string; title?: string; sessionId?: string; bypassPermissions?: boolean; extraArgs?: string[] }> {
     return Array.from(this.panes.values()).map(p => ({
       type: p.shellVariant ? `shell:${p.shellVariant}` : p.type,
       cwd: p.cwd,
       yoloLevel: p.yoloLevel,
+      title: p.title,
       ...(p.sessionId ? { sessionId: p.sessionId } : {}),
-      ...(p.bypassPermissions ? { bypassPermissions: true } : {})
+      ...(p.bypassPermissions ? { bypassPermissions: true } : {}),
+      ...(p.extraArgs.length > 0 ? { extraArgs: p.extraArgs } : {}),
     }))
   }
 
