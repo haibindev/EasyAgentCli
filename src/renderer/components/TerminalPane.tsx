@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
-import { WebglAddon } from '@xterm/addon-webgl'
+
 import '@xterm/xterm/css/xterm.css'
 import type { PaneInfo, YoloLevel } from '../types'
 import { useI18n } from '../i18n-context'
@@ -112,23 +112,7 @@ export default function TerminalPane({ pane, paneIndex, active, focusTrigger, on
     termRef.current = term
     fitRef.current = fitAddon
 
-    // Use WebGL renderer for sharper text (especially CJK bold)
-    // Must load after terminal is fully rendered
-    requestAnimationFrame(() => {
-      try {
-        const webgl = new WebglAddon()
-        webgl.onContextLoss(() => {
-          try { webgl.dispose() } catch { /* ignore */ }
-          // Force canvas re-render after falling back from WebGL
-          requestAnimationFrame(() => {
-            try { term.refresh(0, term.rows - 1) } catch { /* ignore */ }
-          })
-        })
-        term.loadAddon(webgl)
-      } catch {
-        // WebGL not available, fall back to canvas
-      }
-    })
+
 
     // Track last known size to avoid no-op resizes
     let lastCols = 0
