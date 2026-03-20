@@ -171,28 +171,18 @@ export default function TerminalPane({ pane, paneIndex, active, focusTrigger, on
         if (text) window.api.writePane(pane.id, text)
       })
     }
+    const container = containerRef.current
     containerRef.current.addEventListener('contextmenu', handleContextMenu)
 
-    // IME composition guard: block onData while IME is composing, then send
-    // the composed result on compositionend. Without this, each raw pinyin
-    // keystroke is forwarded to the PTY before the IME can compose it.
-    const isComposing = { current: false }
-
-    // Input: terminal keystrokes → main process PTY (blocked during IME)
+    // xterm v5 already handles IME natively: it checks event.isComposing on
+    // keydown events and skips raw composition keystrokes, then fires onData
+    // with the final composed text via the textarea's input event.
+    // Any extra compositionstart/end guard we add risks getting stuck (e.g.
+    // compositionend may not bubble through xterm's handlers), permanently
+    // blocking all input. So we simply forward every onData directly.
     const inputDisposable = term.onData((data) => {
-      if (isComposing.current) return
       window.api.writePane(pane.id, data)
     })
-
-    // Attach IME composition listeners on the container (bubbles from xterm's
-    // internal textarea). We only manage the isComposing flag here — xterm
-    // itself forwards the final composed text via its own input-event handler,
-    // which fires onData. Sending the text here too would cause a double-write.
-    const container = containerRef.current
-    const onCompositionStart = () => { isComposing.current = true }
-    const onCompositionEnd = () => { isComposing.current = false }
-    container.addEventListener('compositionstart', onCompositionStart)
-    container.addEventListener('compositionend', onCompositionEnd)
 
     // Output: main process PTY → terminal display
     const unsubOutput = window.api.onPaneOutput((msg) => {
@@ -245,8 +235,6 @@ export default function TerminalPane({ pane, paneIndex, active, focusTrigger, on
       resizeObserver.disconnect()
       window.removeEventListener('resize', handleWindowResize)
       container?.removeEventListener('contextmenu', handleContextMenu)
-      container?.removeEventListener('compositionstart', onCompositionStart)
-      container?.removeEventListener('compositionend', onCompositionEnd)
       try { term.dispose() } catch { /* prevent WebGL disposal errors from propagating */ }
       termRef.current = null
       fitRef.current = null
