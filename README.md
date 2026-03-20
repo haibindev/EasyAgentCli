@@ -190,3 +190,9 @@ Issues and PRs are welcome!
 ## Author
 
 **haibindev** — [https://haibindev.github.io/](https://haibindev.github.io/)
+
+### Follow on WeChat
+
+Follow the **「海滨code」** WeChat public account for more AI dev tools and tech articles.
+
+<img src="build/wechat-qrcode.jpg" alt="海滨code WeChat" width="200" />
