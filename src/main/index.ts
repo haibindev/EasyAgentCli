@@ -333,6 +333,11 @@ function setupIPC(): void {
     ptyManager.rename(args.id, args.title)
   })
 
+  ipcMain.handle('pane:reorder', async (_, order: string[]) => {
+    ptyManager.reorder(order)
+    saveSession()
+  })
+
   ipcMain.handle('bridge:setLeaveMode', async (_, enabled: boolean) => {
     bridgeServer.setLeaveMode(enabled)
     messageRouter.setLeaveMode(enabled)

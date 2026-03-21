@@ -9,6 +9,7 @@ interface ElectronAPI {
   listPanes: () => Promise<PaneInfo[]>
   setYolo: (id: string, level: string) => Promise<void>
   renamePane: (id: string, title: string) => Promise<void>
+  reorderPanes: (order: string[]) => Promise<void>
   setLeaveMode: (enabled: boolean) => Promise<void>
   getBridgeStatus: () => Promise<BridgeStatus>
   getAdapterConfigs: () => Promise<Record<string, unknown>>

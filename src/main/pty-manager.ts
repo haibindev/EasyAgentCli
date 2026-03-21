@@ -282,6 +282,36 @@ export class PtyManager extends EventEmitter {
     return Array.from(this.panes.values()).map(p => this.toInfo(p))
   }
 
+  /** Reorder panes by id list. Missing ids are ignored; unmentioned panes append. */
+  reorder(ids: string[]): void {
+    const seen = new Set<string>()
+    const ordered: Array<[string, PaneInternal]> = []
+
+    for (const id of ids) {
+      if (seen.has(id)) continue
+      const pane = this.panes.get(id)
+      if (!pane) continue
+      ordered.push([id, pane])
+      seen.add(id)
+    }
+
+    for (const [id, pane] of this.panes.entries()) {
+      if (seen.has(id)) continue
+      ordered.push([id, pane])
+    }
+
+    const currentIds = Array.from(this.panes.keys())
+    const nextIds = ordered.map(([id]) => id)
+    const changed =
+      currentIds.length !== nextIds.length ||
+      currentIds.some((id, idx) => id !== nextIds[idx])
+
+    if (!changed) return
+
+    this.panes = new Map(ordered)
+    this.emitListUpdate()
+  }
+
   /** Update notification intervals/enabled flags and restart timers */
   setNotifyIntervals(heartbeatMin: number, heartbeatEnabled: boolean, idleMin: number, idleEnabled: boolean): void {
     HEARTBEAT_INTERVAL = heartbeatMin * 60 * 1000

@@ -118,10 +118,10 @@ export default function TerminalPane({ pane, paneIndex, active, focusTrigger, on
     let lastCols = 0
     let lastRows = 0
 
-    const safeFit = () => {
+    const safeFit = (forceResize = false) => {
       try {
         fitAddon.fit()
-        if (term.cols !== lastCols || term.rows !== lastRows) {
+        if (forceResize || term.cols !== lastCols || term.rows !== lastRows) {
           lastCols = term.cols
           lastRows = term.rows
           window.api.resizePane(pane.id, term.cols, term.rows)
@@ -133,18 +133,21 @@ export default function TerminalPane({ pane, paneIndex, active, focusTrigger, on
     // Note: the active-focus effect runs before the terminal is created, so we
     // must also focus here on initial mount.
     requestAnimationFrame(() => {
-      safeFit()
+      safeFit(true)
       term.focus()
     })
 
+    // Gemini CLI's Ink UI can misplace the cursor if it misses the first size
+    // update during startup. Force a couple of extra resize signals.
+    let geminiRefitTimer1: ReturnType<typeof setTimeout> | null = null
+    let geminiRefitTimer2: ReturnType<typeof setTimeout> | null = null
+    if (pane.type === 'gemini') {
+      geminiRefitTimer1 = setTimeout(() => safeFit(true), 150)
+      geminiRefitTimer2 = setTimeout(() => safeFit(true), 500)
+    }
+
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
       if (e.type !== 'keydown') return true
-      // CJK IME fix: return false so xterm does NOT run its internal
-      // CompositionHelper.keydown(), which would forward raw pinyin keystrokes
-      // to the PTY and break the composition. The compositionend event is
-      // registered directly on the textarea inside xterm and still fires,
-      // so the final composed characters reach onData correctly.
-      if (e.isComposing || e.keyCode === 229) return false
       // Ctrl+C with selection → copy instead of sending SIGINT
       if (e.ctrlKey && !e.shiftKey && e.key === 'c' && term.hasSelection()) {
         navigator.clipboard.writeText(term.getSelection())
@@ -164,12 +167,6 @@ export default function TerminalPane({ pane, paneIndex, active, focusTrigger, on
     const container = containerRef.current
     containerRef.current.addEventListener('contextmenu', handleContextMenu)
 
-    // xterm v5 already handles IME natively: it checks event.isComposing on
-    // keydown events and skips raw composition keystrokes, then fires onData
-    // with the final composed text via the textarea's input event.
-    // Any extra compositionstart/end guard we add risks getting stuck (e.g.
-    // compositionend may not bubble through xterm's handlers), permanently
-    // blocking all input. So we simply forward every onData directly.
     const inputDisposable = term.onData((data) => {
       window.api.writePane(pane.id, data)
     })
@@ -221,6 +218,8 @@ export default function TerminalPane({ pane, paneIndex, active, focusTrigger, on
       unsubOutput()
       unsubExit()
       unsubClear()
+      if (geminiRefitTimer1) clearTimeout(geminiRefitTimer1)
+      if (geminiRefitTimer2) clearTimeout(geminiRefitTimer2)
       if (resizeTimer) clearTimeout(resizeTimer)
       resizeObserver.disconnect()
       window.removeEventListener('resize', handleWindowResize)

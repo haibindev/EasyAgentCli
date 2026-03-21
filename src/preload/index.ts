@@ -26,6 +26,9 @@ contextBridge.exposeInMainWorld('api', {
   renamePane: (id: string, title: string) =>
     ipcRenderer.invoke('pane:rename', { id, title }),
 
+  reorderPanes: (order: string[]) =>
+    ipcRenderer.invoke('pane:reorder', order),
+
   // Bridge
   setLeaveMode: (enabled: boolean) =>
     ipcRenderer.invoke('bridge:setLeaveMode', enabled),

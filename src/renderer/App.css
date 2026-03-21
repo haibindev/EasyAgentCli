@@ -1703,23 +1703,4 @@ html, body, #root {
   background: rgba(139, 148, 158, 0.35);
 }
 
-/* === IME fix: stabilise IME popup position ===
-   Root cause: .terminal-container has no CSS position property (defaults to
-   static), so it is NOT a positioning context. The textarea's bottom:0 was
-   resolving against .xterm-helpers which has height:0, making bottom:0
-   identical to top:0 — placing the IME bar at the very top of the window.
-   Fix: position:fixed bypasses all ancestor containers and positions the
-   textarea relative to the Electron viewport, anchoring the IME popup to the
-   bottom-left corner of the window regardless of scroll or layout. */
-.terminal-container .xterm-helper-textarea {
-  position: fixed !important;
-  top: auto !important;
-  bottom: 10px !important;
-  left: 10px !important;
-}
-
-/* Hide xterm's in-grid composition overlay so pinyin does not appear in the
-   terminal grid while composing. Text is visible only in the OS IME popup. */
-.terminal-container .composition-view {
-  display: none !important;
-}
+/* Keep helper textarea at xterm defaults for IME positioning. */

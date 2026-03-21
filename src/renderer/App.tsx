@@ -166,6 +166,7 @@ export default function App() {
 
   const handleReorder = useCallback((newOrder: string[]) => {
     setPaneOrder(newOrder)
+    void window.api.reorderPanes(newOrder)
   }, [])
 
   // Panes in user-defined display order
