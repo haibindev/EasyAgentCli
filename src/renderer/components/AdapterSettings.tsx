@@ -162,11 +162,11 @@ export default function AdapterSettings({ onClose, onAgentsRefresh }: Props & { 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [notify, setNotify] = useState<NotifySettings>(DEFAULT_NOTIFY)
   const [tab, setTab] = useState<SettingsTab>(() => {
-    try { return (localStorage.getItem('eac:settingsTab') as SettingsTab) || 'channels' } catch { return 'channels' }
+    try { return (localStorage.getItem('at:settingsTab') as SettingsTab) || 'channels' } catch { return 'channels' }
   })
   const changeTab = (t: SettingsTab) => {
     setTab(t)
-    try { localStorage.setItem('eac:settingsTab', t) } catch { /* ignore */ }
+    try { localStorage.setItem('at:settingsTab', t) } catch { /* ignore */ }
   }
   const [agents, setAgents] = useState<AgentInfo[]>([])
   const [agentsLoading, setAgentsLoading] = useState(false)

@@ -30,7 +30,7 @@ export class Discovery {
       const msg = JSON.stringify({
         role: 'bridge',
         id: this.id,
-        name: 'EasyAgentCli',
+        name: 'AgentTerm',
         wsPort: WS_PORT
       })
       const buf = Buffer.from(msg)

@@ -1,8 +1,8 @@
-# EasyAgentCli 推广与优化计划
+# AgentTerm 推广与优化计划
 
 ## 0. 核心定位（最重要）
 
-**EasyAgentCli 的核心价值不是"多窗格终端"，而是：**
+**AgentTerm 的核心价值不是"多窗格终端"，而是：**
 
 > **让 AI Agent 在你离开电脑后继续工作，通过飞书/Discord/Telegram/Openclaw 远程监控和操控。**
 
@@ -24,7 +24,7 @@
 
 ## 1. 项目命名
 
-当前名称：**EasyAgentCli**
+当前名称：**AgentTerm**
 
 **优点：**
 - 含义直观：Easy + Agent + Cli
@@ -124,12 +124,12 @@ ffmpeg -i demo.mp4 -vf "fps=15,scale=800:-1" -gifflags +transdiff demo.gif
 当前 README 的 "Why" 部分侧重多窗格管理，建议调整为以远程控制为核心：
 
 ```markdown
-## Why EasyAgentCli?
+## Why AgentTerm?
 
 AI coding agents like Claude Code and Codex run long tasks — but they constantly
 need your confirmation. You can't walk away without missing a prompt.
 
-**EasyAgentCli bridges your terminal to your phone.** Enable "Leave Mode", and every
+**AgentTerm bridges your terminal to your phone.** Enable "Leave Mode", and every
 confirmation, completion, or error is forwarded to Feishu, Discord, Telegram, or
 Openclaw. Reply from your phone to approve, reject, or send commands.
 
@@ -183,8 +183,8 @@ npx electron-builder --win
 ```
 
 发布到 GitHub Releases，附上：
-- `EasyAgentCli-Setup-x.x.x.exe`（安装版）
-- `EasyAgentCli-x.x.x-portable.exe`（便携版）
+- `AgentTerm-Setup-x.x.x.exe`（安装版）
+- `AgentTerm-x.x.x-portable.exe`（便携版）
 - 简要更新日志
 
 ### 5.4 添加 LICENSE 文件
@@ -253,10 +253,10 @@ When it needs confirmation → my phone buzzes (Feishu/Discord/Telegram).
 I reply "y" → it continues.
 Task done → I get ✅.
 
-Built EasyAgentCli: bridge AI agent terminals to your IM.
+Built AgentTerm: bridge AI agent terminals to your IM.
 Multi-pane grid + YOLO auto-answer + remote commands.
 
-⭐ github.com/haibindev/EasyAgentCli
+⭐ github.com/haibindev/AgentTerm
 
 #ClaudeCode #AI #DevTools #OpenSource
 ```
@@ -269,7 +269,7 @@ Title: I built a tool that forwards Claude Code/Codex terminal events to your ph
 The problem: I run 2-3 Claude Code sessions simultaneously. They constantly need
 confirmations. I can't leave my desk without missing a prompt and blocking progress.
 
-My solution: EasyAgentCli — an Electron app that:
+My solution: AgentTerm — an Electron app that:
 
 1. Runs multiple AI agents in a grid layout (side by side)
 2. Has a "Leave Mode" — when enabled, ALL terminal events (confirmations,
@@ -292,13 +292,13 @@ GitHub: [link]
 ```
 Title: Show HN: Bridge AI agent terminals to Feishu/Discord/Telegram for remote control
 
-I built EasyAgentCli because I got tired of being chained to my desk while Claude Code
+I built AgentTerm because I got tired of being chained to my desk while Claude Code
 runs. Enable "Leave Mode" and terminal events are forwarded to your IM. Reply from
 your phone to approve, reject, or inspect.
 
 Also: multi-pane grid layout, YOLO auto-answer, session persistence, i18n.
 
-github.com/haibindev/EasyAgentCli
+github.com/haibindev/AgentTerm
 ```
 
 ### V2EX (中文)
@@ -340,10 +340,10 @@ GitHub: [link]
 
 - **Star History 徽章**：在 README 底部添加 star-history.com 的动态图表，展示增长趋势，形成正反馈
   ```markdown
-  [![Star History Chart](https://api.star-history.com/svg?repos=haibindev/EasyAgentCli&type=Date)](https://star-history.com/#haibindev/EasyAgentCli&Date)
+  [![Star History Chart](https://api.star-history.com/svg?repos=haibindev/AgentTerm&type=Date)](https://star-history.com/#haibindev/AgentTerm&Date)
   ```
 - **Social Preview 图**：在 Settings → Social preview 上传一张 1280×640 的封面图（含 Logo + 一句话卖点 + 截图），分享到社交媒体时自动展示
-- **Pinned Repo**：把 EasyAgentCli pin 到你的 GitHub Profile 页面顶部
+- **Pinned Repo**：把 AgentTerm pin 到你的 GitHub Profile 页面顶部
 - **README 顶部 CTA**：加一行醒目的 `⭐ Star this repo to stay updated` 引导
 
 ### 8.2 发布节奏（制造曝光窗口）
@@ -374,7 +374,7 @@ GitHub: [link]
 
 ### 8.5 借力打力（蹭热度但有价值）
 
-- **Claude Code 更新时**：每次 Anthropic 发布 Claude Code 新版本，第一时间发推「EasyAgentCli now supports the latest Claude Code X.X — run 4 sessions side by side and control them from Telegram」
+- **Claude Code 更新时**：每次 Anthropic 发布 Claude Code 新版本，第一时间发推「AgentTerm now supports the latest Claude Code X.X — run 4 sessions side by side and control them from Telegram」
 - **竞品发布时**：Cursor / Windsurf / Codex 有大版本更新时，参与讨论并提供差异化视角
 - **AI 热点事件**：有 AI 编程相关热点时，把自己的工具作为解决方案植入讨论
 

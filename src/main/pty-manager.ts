@@ -556,7 +556,7 @@ export class PtyManager extends EventEmitter {
   /**
    * Convert a CWD path to Claude Code's project directory name.
    * Claude encodes: `:`, `\`, `/` → `-`; non-ASCII chars → `-`
-   * e.g. `D:\prjs\open\EasyAgentCli` → `D--prjs-open-EasyAgentCli`
+   * e.g. `D:\prjs\open\AgentTerm` → `D--prjs-open-AgentTerm`
    */
   private cwdToClaudeProjectDir(cwd: string): string {
     const trimmed = cwd.replace(/[\\/]+$/, '') // strip trailing separators

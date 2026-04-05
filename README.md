@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="build/icon-128.png" alt="EasyAgentCli" width="100" />
+<img src="build/icon-128.png" alt="AgentTerm" width="100" />
 
-# EasyAgentCli
+# AgentTerm
 
 Multi-Pane AI Agent Terminal Manager
 
@@ -10,7 +10,7 @@ Multi-Pane AI Agent Terminal Manager
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)](https://reactjs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?logo=typescript&logoColor=white)](https://typescriptlang.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/haibindev/EasyAgentCli?style=social)](https://github.com/haibindev/EasyAgentCli)
+[![GitHub stars](https://img.shields.io/github/stars/haibindev/AgentTerm?style=social)](https://github.com/haibindev/AgentTerm)
 
 [中文文档](README_zh.md)
 
@@ -20,14 +20,14 @@ Multi-Pane AI Agent Terminal Manager
 
 AI agents work best when left to run — but life doesn't pause for your terminals.
 
-**EasyAgentCli** lets you run Claude Code, Gemini, Kimi, and more side by side in a native multi-pane grid, with full access to every CLI feature. When you need to step away, hit **Leave Mode** — your agents keep running, and you stay in control from your phone via Feishu, Discord, or Telegram.
+**AgentTerm** lets you run Claude Code, Gemini, Kimi, and more side by side in a native multi-pane grid, with full access to every CLI feature. When you need to step away, hit **Leave Mode** — your agents keep running, and you stay in control from your phone via Feishu, Discord, or Telegram.
 
 > No more babysitting terminals. No more missing a confirmation prompt while you're out.  
 > Your agents work. You live.
 
 ![screenshot](assets/screenshot-en.png)
 
-## Why EasyAgentCli?
+## Why AgentTerm?
 
 A typical scenario:
 
@@ -74,8 +74,8 @@ Agents are auto-detected at startup. Go to **Settings → Automation** to see wh
 ### Install & Run
 
 ```bash
-git clone https://github.com/haibindev/EasyAgentCli.git
-cd EasyAgentCli
+git clone https://github.com/haibindev/AgentTerm.git
+cd AgentTerm
 npm install
 npm run rebuild   # build native node-pty module
 npm run dev
@@ -180,7 +180,7 @@ Renderer (React + xterm.js)
 
 Issues and PRs are welcome!
 
-- [Report a bug](https://github.com/haibindev/EasyAgentCli/issues) or suggest a feature
+- [Report a bug](https://github.com/haibindev/AgentTerm/issues) or suggest a feature
 - Give the project a ⭐ Star if you find it useful
 
 ## License

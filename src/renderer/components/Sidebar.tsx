@@ -19,8 +19,8 @@ const AGENT_COLORS: Record<string, string> = {
   shell: 'var(--accent-shell)',
 }
 
-const SIDEBAR_COLLAPSED_KEY = 'eac:sidebarCollapsed'
-const SIDEBAR_WIDTH_KEY = 'eac:sidebarWidth'
+const SIDEBAR_COLLAPSED_KEY = 'at:sidebarCollapsed'
+const SIDEBAR_WIDTH_KEY = 'at:sidebarWidth'
 const SIDEBAR_MIN_WIDTH = 150
 const SIDEBAR_MAX_WIDTH = 480
 const SIDEBAR_DEFAULT_WIDTH = 200

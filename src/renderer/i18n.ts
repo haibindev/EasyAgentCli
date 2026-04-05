@@ -1,4 +1,4 @@
-const LANG_KEY = 'eac:lang'
+const LANG_KEY = 'at:lang'
 
 export type Lang = 'zh' | 'en'
 

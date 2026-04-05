@@ -10,7 +10,7 @@ import NewPaneDialog from './components/NewPaneDialog'
 import AdapterSettings from './components/AdapterSettings'
 import ErrorBoundary from './components/ErrorBoundary'
 
-const LAYOUT_KEY = 'eac:layout'
+const LAYOUT_KEY = 'at:layout'
 
 function loadLayout(): LayoutMode {
   try {
@@ -284,7 +284,7 @@ export default function App() {
           {/* Terminal grid — always mounted so xterm stays alive */}
           {panes.length === 0 ? (
             <div className="empty-state">
-              <h2>EasyAgentCli</h2>
+              <h2>AgentTerm</h2>
               <p>{t.appSubtitle}</p>
               <div className="quick-btns">
                 {agents.filter(a => a.available).map(a => (

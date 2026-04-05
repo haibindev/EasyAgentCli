@@ -126,7 +126,7 @@ export class MessageRouter {
     // Terminal input (# prefix) requires leave mode; slash commands always work
     if (!this.leaveMode && (cmd.type === 'input' || cmd.type === 'yes' || cmd.type === 'no')) {
       if (adapter) {
-        await adapter.sendText('💡 当前未开启离开模式，终端输入不会被处理。请在 EasyAgentCli 中开启「离开模式」后重试。\n📖 输入 /help 查看可用命令')
+        await adapter.sendText('💡 当前未开启离开模式，终端输入不会被处理。请在 AgentTerm 中开启「离开模式」后重试。\n📖 输入 /help 查看可用命令')
       }
       return
     }

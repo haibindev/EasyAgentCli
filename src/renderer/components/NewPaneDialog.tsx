@@ -19,10 +19,10 @@ const SHELL_OPTIONS = [
   { value: 'wsl', label: 'WSL' }
 ]
 
-const LAST_CWD_KEY = 'eac:lastCwd'
-const LAST_SHELL_KEY = 'eac:lastShell'
-const LAST_BYPASS_KEY = 'eac:lastBypass'
-const LAST_EXTRA_ARGS_KEY = 'eac:lastExtraArgs'
+const LAST_CWD_KEY = 'at:lastCwd'
+const LAST_SHELL_KEY = 'at:lastShell'
+const LAST_BYPASS_KEY = 'at:lastBypass'
+const LAST_EXTRA_ARGS_KEY = 'at:lastExtraArgs'
 
 function getLastCwd(): string {
   return localStorage.getItem(LAST_CWD_KEY) || 'D:\\'

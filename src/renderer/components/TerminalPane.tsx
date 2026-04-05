@@ -112,8 +112,6 @@ export default function TerminalPane({ pane, paneIndex, active, focusTrigger, on
     termRef.current = term
     fitRef.current = fitAddon
 
-
-
     // Track last known size to avoid no-op resizes
     let lastCols = 0
     let lastRows = 0
@@ -172,9 +170,22 @@ export default function TerminalPane({ pane, paneIndex, active, focusTrigger, on
     })
 
     // Output: main process PTY → terminal display
+    // Batch writes within a single animation frame to avoid cursor flicker.
+    // Ink-based CLIs (Claude Code, Gemini) emit hide-cursor / redraw / show-cursor
+    // as one logical frame, but Electron IPC may split it into multiple chunks.
+    // Without batching, xterm.js renders intermediate states where the cursor
+    // briefly appears at a stale position.
+    let pendingData = ''
+    let outputRaf: number | null = null
     const unsubOutput = window.api.onPaneOutput((msg) => {
-      if (msg.id === pane.id) {
-        term.write(msg.data)
+      if (msg.id !== pane.id) return
+      pendingData += msg.data
+      if (!outputRaf) {
+        outputRaf = requestAnimationFrame(() => {
+          term.write(pendingData)
+          pendingData = ''
+          outputRaf = null
+        })
       }
     })
 
@@ -218,6 +229,7 @@ export default function TerminalPane({ pane, paneIndex, active, focusTrigger, on
       unsubOutput()
       unsubExit()
       unsubClear()
+      if (outputRaf) cancelAnimationFrame(outputRaf)
       if (geminiRefitTimer1) clearTimeout(geminiRefitTimer1)
       if (geminiRefitTimer2) clearTimeout(geminiRefitTimer2)
       if (resizeTimer) clearTimeout(resizeTimer)

@@ -24,7 +24,7 @@ If applicable, add screenshots.
 **Environment:**
  - OS: [e.g. Windows 11, macOS 14]
  - Node.js version: [e.g. 20.x]
- - EasyAgentCli version: [e.g. 0.1.0]
+ - AgentTerm version: [e.g. 0.1.0]
 
 **Additional context**
 Any other context about the problem.

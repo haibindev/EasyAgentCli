@@ -1703,4 +1703,12 @@ html, body, #root {
   background: rgba(139, 148, 158, 0.35);
 }
 
-/* Keep helper textarea at xterm defaults for IME positioning. */
+/* Keep helper textarea at xterm defaults for IME positioning.
+   Hide the OS-level insertion caret (which Electron renders at the OS
+   compositor layer, bypassing opacity:0) so it doesn't flash around
+   the terminal as the cursor moves during agent output. IME still works
+   because the popup positions itself from the textarea's left/top coords,
+   not from the visible caret. */
+.terminal-container .xterm-helper-textarea {
+  caret-color: transparent !important;
+}
